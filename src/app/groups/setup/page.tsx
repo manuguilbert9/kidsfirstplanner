@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { KidsFirstLogo } from '@/components/icons';
-import { Loader2, Users, Plus, LogIn } from 'lucide-react';
+import { Loader2, Plus, LogIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function GroupSetupPage() {
@@ -20,22 +20,22 @@ export default function GroupSetupPage() {
   const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (loading) {
+   useEffect(() => {
+    if (!loading) {
+      if (!user) {
+        router.replace('/login');
+      } else if (groupId) {
+        router.replace('/');
+      }
+    }
+  }, [user, loading, groupId, router]);
+
+  if (loading || !user || groupId) {
     return (
       <div className="flex flex-col min-h-screen bg-background items-center justify-center">
         <Loader2 className="w-12 h-12 animate-spin text-primary" />
       </div>
     );
-  }
-  
-  if(!user){
-    router.replace('/login');
-    return null;
-  }
-  
-  if(groupId){
-    router.replace('/');
-    return null;
   }
 
   const handleCreateGroup = async () => {
