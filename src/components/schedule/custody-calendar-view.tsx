@@ -10,13 +10,13 @@ import { fr } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, User, Clock, Scissors } from 'lucide-react';
+import { MapPin, User, Clock, Scissors, Replace } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/use-auth';
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { OverrideSheet } from './override-sheet';
+import { Button } from '../ui/button';
 
 function EventCard({ event }: { event: CustodyEvent }) {
   return (
@@ -75,7 +75,11 @@ const generateRecurringEvents = (
         } else if (schedule) {
             // 2. Fallback to recurring schedule
             const scheduleStartDate = new Date(schedule.startDate);
-            const weekDiff = differenceInWeeks(day, scheduleStartDate, { weekStartsOn, locale: fr });
+            
+            const startOfDisplayWeek = startOfWeek(day, { weekStartsOn, locale: fr });
+            const startOfScheduleWeek = startOfWeek(scheduleStartDate, { weekStartsOn, locale: fr });
+            
+            const weekDiff = differenceInWeeks(startOfDisplayWeek, startOfScheduleWeek, { locale: fr });
             
             if (weekDiff % 2 === 0) {
                 currentParent = schedule.parentA;
@@ -112,10 +116,15 @@ const generateRecurringEvents = (
             currentHandover = addWeeks(currentHandover, 1);
         }
 
-        while (isBefore(currentHandover, visibleRange.start)) {
-            currentHandover = addWeeks(currentHandover, 1);
+        let firstHandoverInRange = currentHandover;
+        while (isBefore(firstHandoverInRange, visibleRange.start)) {
+            firstHandoverInRange = addWeeks(firstHandoverInRange, 1);
+        }
+        while (isAfter(firstHandoverInRange, visibleRange.start)) {
+             firstHandoverInRange = subWeeks(firstHandoverInRange, 1);
         }
         
+        currentHandover = firstHandoverInRange;
         while (isBefore(currentHandover, visibleRange.end) || isEqual(currentHandover, visibleRange.end)) {
             const handoverDateTime = setMinutes(setHours(currentHandover, handoverHour), handoverMinute);
             
@@ -125,7 +134,10 @@ const generateRecurringEvents = (
             );
 
             if (isWithinInterval(handoverDateTime, visibleRange) && !isInOverride) {
-                const weekDiff = differenceInWeeks(handoverDateTime, scheduleStartDate, { weekStartsOn, locale: fr });
+                 const startOfHandoverWeek = startOfWeek(handoverDateTime, { weekStartsOn, locale: fr });
+                 const startOfScheduleWeek = startOfWeek(scheduleStartDate, { weekStartsOn, locale: fr });
+                 const weekDiff = differenceInWeeks(startOfHandoverWeek, startOfScheduleWeek, { locale: fr });
+                
                 const fromParent = weekDiff % 2 === 0 ? schedule.parentA : schedule.parentB;
                 const toParent = weekDiff % 2 === 0 ? schedule.parentB : schedule.parentA;
 
@@ -162,7 +174,6 @@ export function CustodyCalendarView() {
   const { parentRole, recurringSchedule, custodyOverrides } = useAuth();
   const [showRecurring, setShowRecurring] = useState(true);
   const [overrideSheetOpen, setOverrideSheetOpen] = useState(false);
-  const [contextMenuDate, setContextMenuDate] = useState<Date | null>(null);
 
   const visibleMonths = useMemo(() => {
     const firstDay = startOfMonth(date || currentMonth);
@@ -172,13 +183,15 @@ export function CustodyCalendarView() {
     }
     return months;
   }, [date, currentMonth, isMobile]);
+  
+  const visibleRange = useMemo(() => {
+     const start = startOfWeek(visibleMonths[0], { weekStartsOn: 1, locale: fr });
+     const end = endOfWeek(endOfMonth(visibleMonths[visibleMonths.length - 1]), { weekStartsOn: 1, locale: fr });
+     return { start, end };
+  }, [visibleMonths]);
 
   const { allEvents, parent1Days, parent2Days, overrideDays } = useMemo(() => {
     const oneTimeEvents = mockEvents;
-    const visibleRange = {
-      start: startOfWeek(visibleMonths[0], { weekStartsOn: 1, locale: fr }),
-      end: endOfWeek(endOfMonth(visibleMonths[visibleMonths.length - 1]), { weekStartsOn: 1, locale: fr })
-    };
     
     const recurring = showRecurring ? generateRecurringEvents(recurringSchedule, custodyOverrides, visibleRange) : [];
 
@@ -205,7 +218,7 @@ export function CustodyCalendarView() {
 
     return { allEvents: combinedEvents, parent1Days: p1Days, parent2Days: p2Days, overrideDays: overrides };
 
-  }, [recurringSchedule, showRecurring, visibleMonths, custodyOverrides]);
+  }, [recurringSchedule, showRecurring, visibleRange, custodyOverrides]);
 
   const eventsForSelectedDay = useMemo(() => {
     return date ? getEventsForDay(date, allEvents) : [];
@@ -233,28 +246,9 @@ export function CustodyCalendarView() {
     setCurrentMonth(startOfMonth(month));
   };
   
-  const handleOverrideClick = (day: Date) => {
-    setContextMenuDate(day);
+  const handleOverrideClick = () => {
     setOverrideSheetOpen(true);
   }
-
-  const DayWithContextMenu = ({ day }: { day: Date }) => (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-         <div className="relative w-full h-full">
-          {overrideDays.some(d => isSameDay(d, day)) && (
-            <Scissors className="absolute top-1 right-1 w-3 h-3 text-muted-foreground z-10" />
-          )}
-        </div>
-      </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem onClick={() => handleOverrideClick(day)}>
-          Changer la garde
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
-  );
-
 
   return (
     <>
@@ -264,7 +258,7 @@ export function CustodyCalendarView() {
             <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>Calendrier</CardTitle>
-                  <CardDescription>Sélectionnez un jour pour voir le planning détaillé. Clic droit pour changer une garde.</CardDescription>
+                  <CardDescription>Sélectionnez un jour pour voir le planning détaillé.</CardDescription>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Switch 
@@ -292,11 +286,11 @@ export function CustodyCalendarView() {
               weekStartsOn={1}
               components={{
                 DayContent: (props) => (
-                  <div className="relative w-full h-full">
-                    <DayWithContextMenu day={props.date} />
-                    <span className="absolute -translate-x-1/2 -translate-y-1/2 top-1/2 left-1/2">
-                      {format(props.date, 'd')}
-                    </span>
+                   <div className="relative w-full h-full flex items-center justify-center">
+                    {overrideDays.some(d => isSameDay(d, props.date)) && (
+                      <Scissors className="absolute top-1 right-1 w-3 h-3 text-muted-foreground z-10" />
+                    )}
+                    {format(props.date, 'd')}
                   </div>
                 ),
               }}
@@ -349,12 +343,23 @@ export function CustodyCalendarView() {
               )}
             </CardContent>
           </ScrollArea>
+           {date && (
+            <>
+              <Separator />
+              <CardContent className="p-4">
+                  <Button variant="outline" className="w-full" onClick={handleOverrideClick}>
+                    <Replace className="mr-2 h-4 w-4" />
+                    Changer la garde
+                  </Button>
+              </CardContent>
+            </>
+          )}
         </Card>
       </div>
       <OverrideSheet 
         open={overrideSheetOpen}
         onOpenChange={setOverrideSheetOpen}
-        startDate={contextMenuDate}
+        startDate={date}
       />
     </>
   );

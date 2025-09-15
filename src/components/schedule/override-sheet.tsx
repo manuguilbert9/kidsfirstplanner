@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { format, isBefore } from 'date-fns';
+import { format, isBefore, addDays } from 'date-fns';
 import {
   Sheet,
   SheetContent,
@@ -41,7 +41,7 @@ type OverrideFormValues = z.infer<typeof formSchema>;
 interface OverrideSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  startDate: Date | null;
+  startDate: Date | null | undefined;
 }
 
 export function OverrideSheet({ open, onOpenChange, startDate }: OverrideSheetProps) {
@@ -51,19 +51,34 @@ export function OverrideSheet({ open, onOpenChange, startDate }: OverrideSheetPr
 
   const form = useForm<OverrideFormValues>({
     resolver: zodResolver(formSchema),
+    defaultValues: {
+      parent: 'Parent 1',
+      reason: ''
+    }
   });
   
   useEffect(() => {
-    if (startDate) {
+    if (open && startDate) {
         form.setValue('endDate', format(startDate, 'yyyy-MM-dd'));
     }
-  }, [startDate, form]);
+     if (!open) {
+      form.reset();
+    }
+  }, [startDate, open, form]);
 
   const handleSubmit = async (values: OverrideFormValues) => {
     if (!startDate) return;
 
-    const endDate = new Date(values.endDate);
-     if (isBefore(endDate, startDate)) {
+    // The date from the input will be in local time, but at midnight. 
+    // We create a date at noon to avoid timezone issues.
+    const localEndDate = new Date(values.endDate);
+    const endDate = new Date(localEndDate.getFullYear(), localEndDate.getMonth(), localEndDate.getDate(), 12, 0, 0);
+    
+    const localStartDate = new Date(startDate);
+    const noonStartDate = new Date(localStartDate.getFullYear(), localStartDate.getMonth(), localStartDate.getDate(), 12, 0, 0);
+
+
+     if (isBefore(endDate, noonStartDate)) {
       form.setError('endDate', { message: 'La date de fin ne peut pas être antérieure à la date de début.' });
       return;
     }
@@ -71,7 +86,7 @@ export function OverrideSheet({ open, onOpenChange, startDate }: OverrideSheetPr
     setIsLoading(true);
     try {
       await addCustodyOverride({
-        startDate,
+        startDate: noonStartDate,
         endDate: endDate,
         parent: values.parent,
         reason: values.reason,
@@ -82,7 +97,6 @@ export function OverrideSheet({ open, onOpenChange, startDate }: OverrideSheetPr
         description: 'La période de garde a été mise à jour.',
       });
       onOpenChange(false);
-      form.reset();
     } catch (error) {
       console.error("Erreur lors de la mise à jour de la garde", error);
       toast({

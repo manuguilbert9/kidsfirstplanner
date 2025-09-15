@@ -12,7 +12,7 @@ import { auth, db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, onSnapshot, Timestamp, collection, getDocs, query, where, updateDoc, arrayUnion } from 'firebase/firestore';
 import type { ParentRole, RecurringSchedule, UserProfileData, CustodyOverride } from '@/lib/types';
 import { useColors } from './use-colors';
-import {v4 as uuidv4} from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 
 interface UserProfile {
   groupId: string | null;
@@ -90,9 +90,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             querySnapshot.forEach((doc) => {
                 const memberData = doc.data() as UserProfileData;
                  if (memberData.parentRole === 'Parent 1') {
-                    setParent1Color(memberData.color || 'hsl(220 70% 50%)');
+                    setParent1Color(memberData.color || null);
                 } else if (memberData.parentRole === 'Parent 2') {
-                    setParent2Color(memberData.color || 'hsl(160 60% 45%)');
+                    setParent2Color(memberData.color || null);
                 }
             });
          });
@@ -114,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (groupData?.custodyOverrides) {
               overrides = groupData.custodyOverrides.map((o: any) => ({
                 ...o,
+                id: o.id || uuidv4(),
                 startDate: (o.startDate as Timestamp).toDate(),
                 endDate: (o.endDate as Timestamp).toDate(),
               }));
@@ -146,7 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const createGroup = async (userId: string, groupName: string) => {
     const groupId = Math.random().toString(36).substring(2, 8).toUpperCase();
     await setDoc(doc(db, 'groups', groupId), { name: groupName, members: [userId], custodyOverrides: [] });
-    const defaultColor = 'hsl(220 70% 50%)';
+    const defaultColor = '220 70% 50%';
     await setDoc(doc(db, 'users', userId), { groupId, parentRole: 'Parent 1', color: defaultColor }, { merge: true });
     return groupId;
   };
@@ -159,7 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!members.includes(userId)) {
         await updateDoc(groupDocRef, { members: arrayUnion(userId) });
       }
-      const defaultColor = 'hsl(160 60% 45%)';
+      const defaultColor = '160 60% 45%';
       await setDoc(doc(db, 'users', userId), { groupId: groupIdToJoin, parentRole: 'Parent 2', color: defaultColor }, { merge: true });
       return true;
     }
