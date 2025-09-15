@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { mockEvents } from '@/lib/mock-data';
-import type { CustodyEvent, RecurringSchedule, CustodyOverride } from '@/lib/types';
+import type { CustodyEvent, RecurringSchedule, CustodyOverride, ParentRole } from '@/lib/types';
 import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, endOfMonth, isWithinInterval, eachDayOfInterval, differenceInWeeks, getDay, addWeeks, subWeeks, endOfWeek, addMonths, startOfMonth, isAfter, isBefore, isEqual } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
@@ -18,7 +18,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { OverrideSheet } from './override-sheet';
 import { Button } from '../ui/button';
 
-function EventCard({ event }: { event: CustodyEvent }) {
+function EventCard({ event, getFirstName }: { event: CustodyEvent; getFirstName: (role: ParentRole) => string }) {
   return (
     <Card className="transition-all duration-300 border-l-4 hover:shadow-lg bg-card/80 border-primary">
       <CardHeader className="p-4">
@@ -27,7 +27,7 @@ function EventCard({ event }: { event: CustodyEvent }) {
             <CardTitle className="text-lg font-headline">{event.title}</CardTitle>
             <CardDescription className="flex items-center gap-2 mt-1">
               <User className="w-3 h-3" />
-              {event.parent}
+              {getFirstName(event.parent)}
             </CardDescription>
           </div>
           {event.isHandover && <Badge variant="secondary">Passation</Badge>}
@@ -62,7 +62,7 @@ const generateRecurringEvents = (
     const daysToCover = eachDayOfInterval(visibleRange);
 
     daysToCover.forEach(day => {
-        let currentParent;
+        let currentParent: ParentRole | undefined;
 
         // 1. Check for overrides
         const activeOverride = overrides.find(o => 
@@ -171,7 +171,7 @@ export function CustodyCalendarView() {
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [currentMonth, setCurrentMonth] = useState(startOfMonth(new Date()));
   const isMobile = useIsMobile();
-  const { parentRole, recurringSchedule, custodyOverrides } = useAuth();
+  const { parentRole, recurringSchedule, custodyOverrides, getFirstName } = useAuth();
   const [showRecurring, setShowRecurring] = useState(true);
   const [overrideSheetOpen, setOverrideSheetOpen] = useState(false);
 
@@ -211,7 +211,7 @@ export function CustodyCalendarView() {
       if (event.isHandover) return;
       if (event.parent === 'Parent 1') {
         p1Days.push(event.start);
-      } else {
+      } else if (event.parent === 'Parent 2') {
         p2Days.push(event.start);
       }
     });
@@ -300,11 +300,11 @@ export function CustodyCalendarView() {
             <div className="flex items-center justify-center space-x-4 text-sm">
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-parent1/80"></span>
-                <span>Parent 1 {parentRole === 'Parent 1' && '(Vous)'}</span>
+                <span>{getFirstName('Parent 1')} {parentRole === 'Parent 1' && '(Vous)'}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-parent2/80"></span>
-                <span>Parent 2 {parentRole === 'Parent 2' && '(Vous)'}</span>
+                <span>{getFirstName('Parent 2')} {parentRole === 'Parent 2' && '(Vous)'}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
@@ -332,7 +332,7 @@ export function CustodyCalendarView() {
               {eventsForSelectedDay.length > 0 ? (
                 <div className="space-y-4">
                   {eventsForSelectedDay.map((event) => (
-                    <EventCard key={event.id} event={event} />
+                    <EventCard key={event.id} event={event} getFirstName={getFirstName} />
                   ))}
                 </div>
               ) : (

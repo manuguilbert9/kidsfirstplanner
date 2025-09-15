@@ -114,7 +114,7 @@ export default function GroupSetupPage() {
                         <label htmlFor="groupName" className="text-sm font-medium">Nom du groupe</label>
                         <Input 
                             id="groupName"
-                            placeholder="ex: Les enfants Smith" 
+                            placeholder="ex: Famille Dupont" 
                             value={groupName}
                             onChange={(e) => setGroupName(e.target.value)}
                         />

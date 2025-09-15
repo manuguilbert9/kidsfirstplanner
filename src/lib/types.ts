@@ -31,4 +31,9 @@ export interface UserProfileData {
   groupId: string;
   parentRole: ParentRole;
   color?: string;
+  displayName?: string;
+}
+
+export type GroupMember = UserProfileData & {
+  uid: string;
 }

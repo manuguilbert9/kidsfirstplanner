@@ -55,7 +55,7 @@ const weekdays = [
 export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const { updateRecurringSchedule, recurringSchedule } = useAuth();
+  const { updateRecurringSchedule, recurringSchedule, getFirstName } = useAuth();
   const [parentA, setParentA] = useState<ParentRole>('Parent 1');
 
   const form = useForm<RecurringFormValues>({
@@ -177,7 +177,7 @@ export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
               <div className="space-y-0.5">
                 <FormLabel>Inverser les parents</FormLabel>
                  <p className="text-xs text-muted-foreground">
-                    Le calendrier commencera avec le <strong>{parentA}</strong>.
+                    Le calendrier commencera avec <strong>{getFirstName(parentA)}</strong>.
                 </p>
               </div>
               <FormControl>

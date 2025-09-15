@@ -44,7 +44,7 @@ interface EventSheetProps {
 
 export function EventSheet({ open, onOpenChange }: EventSheetProps) {
   const { toast } = useToast();
-  const { parentRole } = useAuth();
+  const { parentRole, getFirstName } = useAuth();
   const [isSuggestionModalOpen, setSuggestionModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedParent, setSelectedParent] = useState<ParentRole | ''>('');
@@ -105,8 +105,8 @@ export function EventSheet({ open, onOpenChange }: EventSheetProps) {
                         <SelectValue placeholder="Sélectionner le parent" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Parent 1">Parent 1</SelectItem>
-                        <SelectItem value="Parent 2">Parent 2</SelectItem>
+                        <SelectItem value="Parent 1">{getFirstName('Parent 1')}</SelectItem>
+                        <SelectItem value="Parent 2">{getFirstName('Parent 2')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

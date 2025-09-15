@@ -28,7 +28,7 @@ import { PARENT_COLORS } from '@/lib/colors';
 export function HeaderActions() {
   const [isSheetOpen, setSheetOpen] = useState(false);
   const { toast } = useToast();
-  const { user, parentRole, updateParentRole, updateParentColor, parentColor } = useAuth();
+  const { user, parentRole, updateParentRole, updateParentColor, parentColor, getFirstName } = useAuth();
 
   const handleExport = () => {
     toast({
@@ -57,7 +57,7 @@ export function HeaderActions() {
         await updateParentRole(user.uid, role as ParentRole);
         toast({
           title: 'Rôle mis à jour',
-          description: `Vous êtes maintenant défini comme ${role}.`,
+          description: `Vous êtes maintenant défini comme ${getFirstName(role as ParentRole)}.`,
         });
       } catch (error) {
         console.error("Erreur lors de la mise à jour du rôle", error);
@@ -130,8 +130,8 @@ export function HeaderActions() {
                 <DropdownMenuSeparator />
                 <DropdownMenuRadioGroup value={parentRole ?? ''} onValueChange={handleRoleChange}>
                    <DropdownMenuLabel>Mon rôle</DropdownMenuLabel>
-                   <DropdownMenuRadioItem value="Parent 1">Parent 1</DropdownMenuRadioItem>
-                   <DropdownMenuRadioItem value="Parent 2">Parent 2</DropdownMenuRadioItem>
+                   <DropdownMenuRadioItem value="Parent 1">{getFirstName('Parent 1')}</DropdownMenuRadioItem>
+                   <DropdownMenuRadioItem value="Parent 2">{getFirstName('Parent 2')}</DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuSub>

@@ -6,11 +6,12 @@ import {
   useState,
   useEffect,
   ReactNode,
+  useCallback,
 } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, onSnapshot, Timestamp, collection, getDocs, query, where, updateDoc, arrayUnion } from 'firebase/firestore';
-import type { ParentRole, RecurringSchedule, UserProfileData, CustodyOverride } from '@/lib/types';
+import type { ParentRole, RecurringSchedule, UserProfileData, CustodyOverride, GroupMember } from '@/lib/types';
 import { useColors } from './use-colors';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -20,6 +21,7 @@ interface UserProfile {
   parentColor: string | null;
   recurringSchedule: RecurringSchedule | null;
   custodyOverrides: CustodyOverride[];
+  members: GroupMember[];
 }
 interface AuthContextType {
   user: User | null;
@@ -29,12 +31,14 @@ interface AuthContextType {
   parentColor: string | null;
   recurringSchedule: RecurringSchedule | null;
   custodyOverrides: CustodyOverride[];
+  members: GroupMember[];
   createGroup: (userId: string, groupName: string) => Promise<string>;
   joinGroup: (userId: string, groupId: string) => Promise<boolean>;
   updateParentRole: (userId: string, role: ParentRole) => Promise<void>;
   updateRecurringSchedule: (schedule: RecurringSchedule) => Promise<void>;
   updateParentColor: (userId: string, color: string) => Promise<void>;
   addCustodyOverride: (override: Omit<CustodyOverride, 'id'>) => Promise<void>;
+  getFirstName: (role: ParentRole) => string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     recurringSchedule: null,
     parentColor: null,
     custodyOverrides: [],
+    members: [],
   });
 
   const { setParent1Color, setParent2Color } = useColors();
@@ -56,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (!user) {
-        setUserProfile({ groupId: null, parentRole: null, recurringSchedule: null, parentColor: null, custodyOverrides: [] });
+        setUserProfile({ groupId: null, parentRole: null, recurringSchedule: null, parentColor: null, custodyOverrides: [], members: [] });
         setLoading(false);
       }
     });
@@ -86,7 +91,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (currentGroupId) {
          const groupUsersQuery = query(collection(db, 'users'), where('groupId', '==', currentGroupId));
+         
          const unsubscribeGroupUsers = onSnapshot(groupUsersQuery, (querySnapshot) => {
+            const members: GroupMember[] = [];
             querySnapshot.forEach((doc) => {
                 const memberData = doc.data() as UserProfileData;
                  if (memberData.parentRole === 'Parent 1') {
@@ -94,7 +101,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 } else if (memberData.parentRole === 'Parent 2') {
                     setParent2Color(memberData.color || null);
                 }
+                members.push({
+                  uid: doc.id,
+                  ...memberData
+                })
             });
+            setUserProfile(prev => ({ ...prev, members }));
          });
 
          const groupDocRef = doc(db, 'groups', currentGroupId);
@@ -132,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             unsubscribeGroup();
          }
       } else {
-        setUserProfile(prev => ({...prev, recurringSchedule: null, custodyOverrides: []}));
+        setUserProfile(prev => ({...prev, recurringSchedule: null, custodyOverrides: [], members: []}));
         setLoading(false);
       }
 
@@ -145,14 +157,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, setParent1Color, setParent2Color]);
 
   const createGroup = async (userId: string, groupName: string) => {
+    if (!user) throw new Error("Utilisateur non authentifié");
     const groupId = Math.random().toString(36).substring(2, 8).toUpperCase();
     await setDoc(doc(db, 'groups', groupId), { name: groupName, members: [userId], custodyOverrides: [] });
     const defaultColor = '220 70% 50%';
-    await setDoc(doc(db, 'users', userId), { groupId, parentRole: 'Parent 1', color: defaultColor }, { merge: true });
+    await setDoc(doc(db, 'users', userId), { groupId, parentRole: 'Parent 1', color: defaultColor, displayName: user.displayName }, { merge: true });
     return groupId;
   };
 
   const joinGroup = async (userId: string, groupIdToJoin: string) => {
+    if (!user) throw new Error("Utilisateur non authentifié");
     const groupDocRef = doc(db, 'groups', groupIdToJoin);
     const groupDoc = await getDoc(groupDocRef);
     if (groupDoc.exists()) {
@@ -161,7 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await updateDoc(groupDocRef, { members: arrayUnion(userId) });
       }
       const defaultColor = '160 60% 45%';
-      await setDoc(doc(db, 'users', userId), { groupId: groupIdToJoin, parentRole: 'Parent 2', color: defaultColor }, { merge: true });
+      await setDoc(doc(db, 'users', userId), { groupId: groupIdToJoin, parentRole: 'Parent 2', color: defaultColor, displayName: user.displayName }, { merge: true });
       return true;
     }
     return false;
@@ -196,6 +210,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
   
+  const getFirstName = useCallback((role: ParentRole) => {
+      const member = userProfile.members.find(m => m.parentRole === role);
+      if (member && member.displayName) {
+          return member.displayName.split(' ')[0];
+      }
+      return role;
+  }, [userProfile.members]);
+
+
   const value = { 
     user, 
     loading, 
@@ -204,12 +227,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     parentColor: userProfile.parentColor,
     recurringSchedule: userProfile.recurringSchedule,
     custodyOverrides: userProfile.custodyOverrides,
+    members: userProfile.members,
     createGroup, 
     joinGroup, 
     updateParentRole,
     updateRecurringSchedule,
     updateParentColor,
     addCustodyOverride,
+    getFirstName,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

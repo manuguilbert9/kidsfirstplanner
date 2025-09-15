@@ -46,7 +46,7 @@ interface OverrideSheetProps {
 
 export function OverrideSheet({ open, onOpenChange, startDate }: OverrideSheetProps) {
   const { toast } = useToast();
-  const { addCustodyOverride } = useAuth();
+  const { addCustodyOverride, getFirstName } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<OverrideFormValues>({
@@ -154,8 +154,8 @@ export function OverrideSheet({ open, onOpenChange, startDate }: OverrideSheetPr
                                     </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                    <SelectItem value="Parent 1">Parent 1</SelectItem>
-                                    <SelectItem value="Parent 2">Parent 2</SelectItem>
+                                    <SelectItem value="Parent 1">{getFirstName('Parent 1')}</SelectItem>
+                                    <SelectItem value="Parent 2">{getFirstName('Parent 2')}</SelectItem>
                                     </SelectContent>
                                 </Select>
                                 <FormMessage />
