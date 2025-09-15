@@ -55,6 +55,8 @@ export default {
           '4': 'hsl(var(--chart-4))',
           '5': 'hsl(var(--chart-5))',
         },
+        parent1: 'hsl(var(--parent1))',
+        parent2: 'hsl(var(--parent2))',
         sidebar: {
           DEFAULT: 'hsl(var(--sidebar-background))',
           foreground: 'hsl(var(--sidebar-foreground))',

@@ -24,6 +24,8 @@
     --input: 0 0% 30%;
     --ring: 33 100% 50%;
     --radius: 0.5rem;
+    --parent1: 220 70% 50%;
+    --parent2: 160 60% 45%;
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 240 5.9% 10%;
@@ -59,6 +61,8 @@
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+    --parent1: 220 70% 50%;
+    --parent2: 160 60% 45%;
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -76,5 +80,17 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .day-parent1 {
+    @apply bg-parent1/30 text-white;
+  }
+  .day-parent2 {
+    @apply bg-parent2/30 text-white;
+  }
+  .day-parent1.day-parent2 {
+    background: linear-gradient(to bottom right, hsl(var(--parent1) / 0.3) 0% 50%, hsl(var(--parent2) / 0.3) 50% 100%);
   }
 }

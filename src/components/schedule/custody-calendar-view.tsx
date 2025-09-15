@@ -1,20 +1,20 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { mockEvents } from '@/lib/mock-data';
-import type { CustodyEvent, RecurringSchedule } from '@/lib/types';
-import { format, isSameDay, getDay, addDays, setHours, setMinutes, startOfWeek, endOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, areIntervalsOverlapping } from 'date-fns';
+import type { CustodyEvent, RecurringSchedule, ParentRole } from '@/lib/types';
+import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, areIntervalsOverlapping, eachDayOfInterval, isWithinInterval } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, User, Clock, Edit } from 'lucide-react';
-import { Button } from '../ui/button';
+import { MapPin, User, Clock } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '@/hooks/use-auth';
 
 function EventCard({ event }: { event: CustodyEvent }) {
   return (
@@ -55,47 +55,59 @@ const generateRecurringEvents = (schedule: RecurringSchedule | null, visibleRang
     const weeks = eachWeekOfInterval(visibleRange, { weekStartsOn: schedule.alternatingWeekDay as any, locale: fr });
     const [handoverHour, handoverMinute] = schedule.handoverTime.split(':').map(Number);
     
-    let isParentAWeek = true;
     const scheduleStartWeek = startOfWeek(schedule.startDate, { weekStartsOn: schedule.alternatingWeekDay as any, locale: fr });
 
     for (const weekStart of weeks) {
         if (weekStart < scheduleStartWeek) continue;
 
         const weekNumber = Math.floor((weekStart.getTime() - scheduleStartWeek.getTime()) / (1000 * 60 * 60 * 24 * 7));
-        isParentAWeek = weekNumber % 2 === 0;
+        const isParentAWeek = weekNumber % 2 === 0;
 
         const currentParent = isParentAWeek ? schedule.parentA : schedule.parentB;
         const nextParent = isParentAWeek ? schedule.parentB : schedule.parentA;
         
-        const handoverDateTime = setMinutes(setHours(weekStart, handoverHour), handoverMinute);
+        const handoverDateTime = setMinutes(setHours(addDays(weekStart, schedule.alternatingWeekDay), handoverHour), handoverMinute);
+        const startOfCustodyWeek = handoverDateTime
         const endOfCustodyWeek = addDays(handoverDateTime, 7);
 
         const event: CustodyEvent = {
             id: `recurring-${weekStart.toISOString()}`,
-            title: `Semaine de garde`,
-            start: handoverDateTime,
+            title: `Garde de ${currentParent}`,
+            start: startOfCustodyWeek,
             end: endOfCustodyWeek,
             parent: currentParent,
             location: 'Alternance',
             description: `Semaine avec ${currentParent}. Passation à ${nextParent} à la fin.`,
+            isHandover: false, // This is the whole week, not just the handover
+        };
+
+        const handoverEvent: CustodyEvent = {
+            id: `handover-${weekStart.toISOString()}`,
+            title: 'Passation',
+            start: handoverDateTime,
+            end: setMinutes(setHours(handoverDateTime, handoverHour + 1), handoverMinute),
+            parent: nextParent,
+            location: 'Lieu de passation',
+            description: `Passation de ${currentParent} à ${nextParent}`,
             isHandover: true,
         };
-        events.push(event);
+        
+        events.push(event, handoverEvent);
     }
     return events;
 };
 
 const getEventsForDay = (day: Date, allEvents: CustodyEvent[]): CustodyEvent[] => {
-    return allEvents.filter(event => 
-        isSameDay(event.start, day) || 
-        (day > event.start && day < event.end)
-    ).sort((a,b) => a.start.getTime() - b.start.getTime());
+    return allEvents
+      .filter(event => isWithinInterval(day, { start: event.start, end: event.end }) && !isSameDay(day, event.end))
+      .sort((a,b) => a.start.getTime() - b.start.getTime());
 };
 
 
 export function CustodyCalendarView() {
   const [date, setDate] = useState<Date | undefined>(new Date());
   const isMobile = useIsMobile();
+  const { parentRole } = useAuth();
   const [showRecurring, setShowRecurring] = useState(true);
   const [recurringSchedule, setRecurringSchedule] = useState<RecurringSchedule | null>({
       alternatingWeekDay: 5, // Friday
@@ -110,35 +122,55 @@ export function CustodyCalendarView() {
     return [firstDay];
   },[date]);
 
-  const allEvents = useMemo(() => {
+  const { allEvents, parent1Days, parent2Days } = useMemo(() => {
     const oneTimeEvents = mockEvents;
-    if (!showRecurring || !recurringSchedule) return oneTimeEvents;
-    
     const visibleRange = {
       start: startOfMonth(visibleMonths[0]),
       end: endOfMonth(visibleMonths[isMobile ? 0 : 1] ?? visibleMonths[0])
     };
+    
+    const recurring = showRecurring ? generateRecurringEvents(recurringSchedule, visibleRange) : [];
 
-    const recurringEvents = generateRecurringEvents(recurringSchedule, visibleRange)
-        .filter(re => {
-            // Filtrer les événements récurrents qui chevauchent les passations ponctuelles
-            return !oneTimeEvents.some(ote => 
-                ote.isHandover && areIntervalsOverlapping(
-                    {start: ote.start, end: ote.end},
-                    {start: re.start, end: re.end}
-                )
-            );
-        });
+    const combinedEvents = [...oneTimeEvents, ...recurring];
 
-    return [...oneTimeEvents, ...recurringEvents];
+    const p1Days: Date[] = [];
+    const p2Days: Date[] = [];
+
+    combinedEvents.forEach(event => {
+      // We only care about custody weeks, not single events for highlighting
+      if (event.isHandover) return;
+
+      const eventDays = eachDayOfInterval({ start: event.start, end: event.end });
+      if (event.parent === 'Parent 1') {
+        p1Days.push(...eventDays);
+      } else {
+        p2Days.push(...eventDays);
+      }
+    });
+
+    return { allEvents: combinedEvents, parent1Days: p1Days, parent2Days: p2Days };
 
   }, [recurringSchedule, showRecurring, visibleMonths, isMobile]);
 
   const eventsForSelectedDay = useMemo(() => {
     return date ? getEventsForDay(date, allEvents) : [];
   }, [date, allEvents]);
+  
+  const handoverDays = useMemo(() => allEvents.filter(e => e.isHandover).map(event => event.start), [allEvents]);
 
-  const eventDays = useMemo(() => allEvents.map(event => event.start), [allEvents]);
+  const modifiers = {
+    hasEvent: handoverDays,
+    today: new Date(),
+    parent1: parent1Days,
+    parent2: parent2Days,
+  };
+
+  const modifiersClassNames = {
+    hasEvent: 'relative flex items-center justify-center after:content-[""] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-1.5 after:h-1.5 after:rounded-full after:bg-primary',
+    today: 'bg-accent text-accent-foreground rounded-md',
+    parent1: 'day-parent1',
+    parent2: 'day-parent2',
+  };
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -167,16 +199,26 @@ export function CustodyCalendarView() {
             onSelect={setDate}
             className="p-0"
             locale={fr}
-            modifiers={{
-                hasEvent: eventDays,
-                today: new Date(),
-            }}
-            modifiersClassNames={{
-                hasEvent: 'relative flex items-center justify-center after:content-[""] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-1.5 after:h-1.5 after:rounded-full after:bg-primary',
-                today: 'bg-accent text-accent-foreground rounded-md',
-            }}
+            modifiers={modifiers}
+            modifiersClassNames={modifiersClassNames}
             numberOfMonths={isMobile ? 1 : 2}
           />
+        </CardContent>
+         <CardContent className="pt-0">
+          <div className="flex items-center justify-center space-x-4 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-parent1/80"></span>
+              <span>Parent 1 {parentRole === 'Parent 1' && '(Vous)'}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-parent2/80"></span>
+              <span>Parent 2 {parentRole === 'Parent 2' && '(Vous)'}</span>
+            </div>
+             <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+              <span>Passation</span>
+            </div>
+          </div>
         </CardContent>
       </Card>
       <Card className="flex flex-col">
