@@ -6,19 +6,20 @@ import {
   useState,
   useEffect,
   ReactNode,
-  useCallback,
 } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, onSnapshot, Timestamp, collection, getDocs, query, where } from 'firebase/firestore';
-import type { ParentRole, RecurringSchedule, UserProfileData } from '@/lib/types';
+import { doc, getDoc, setDoc, onSnapshot, Timestamp, collection, getDocs, query, where, updateDoc, arrayUnion } from 'firebase/firestore';
+import type { ParentRole, RecurringSchedule, UserProfileData, CustodyOverride } from '@/lib/types';
 import { useColors } from './use-colors';
+import {v4 as uuidv4} from 'uuid';
 
 interface UserProfile {
   groupId: string | null;
   parentRole: ParentRole | null;
   parentColor: string | null;
   recurringSchedule: RecurringSchedule | null;
+  custodyOverrides: CustodyOverride[];
 }
 interface AuthContextType {
   user: User | null;
@@ -27,11 +28,13 @@ interface AuthContextType {
   parentRole: ParentRole | null;
   parentColor: string | null;
   recurringSchedule: RecurringSchedule | null;
+  custodyOverrides: CustodyOverride[];
   createGroup: (userId: string, groupName: string) => Promise<string>;
   joinGroup: (userId: string, groupId: string) => Promise<boolean>;
   updateParentRole: (userId: string, role: ParentRole) => Promise<void>;
   updateRecurringSchedule: (schedule: RecurringSchedule) => Promise<void>;
   updateParentColor: (userId: string, color: string) => Promise<void>;
+  addCustodyOverride: (override: Omit<CustodyOverride, 'id'>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -44,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     parentRole: null, 
     recurringSchedule: null,
     parentColor: null,
+    custodyOverrides: [],
   });
 
   const { setParent1Color, setParent2Color } = useColors();
@@ -52,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (!user) {
-        setUserProfile({ groupId: null, parentRole: null, recurringSchedule: null, parentColor: null });
+        setUserProfile({ groupId: null, parentRole: null, recurringSchedule: null, parentColor: null, custodyOverrides: [] });
         setLoading(false);
       }
     });
@@ -86,9 +90,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             querySnapshot.forEach((doc) => {
                 const memberData = doc.data() as UserProfileData;
                  if (memberData.parentRole === 'Parent 1') {
-                    setParent1Color(memberData.color || null);
+                    setParent1Color(memberData.color || 'hsl(220 70% 50%)');
                 } else if (memberData.parentRole === 'Parent 2') {
-                    setParent2Color(memberData.color || null);
+                    setParent2Color(memberData.color || 'hsl(160 60% 45%)');
                 }
             });
          });
@@ -96,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
          const groupDocRef = doc(db, 'groups', currentGroupId);
          const unsubscribeGroup = onSnapshot(groupDocRef, (groupDoc) => {
             const groupData = groupDoc.data();
+
             let schedule: RecurringSchedule | null = null;
             if (groupData?.recurringSchedule) {
                 const { startDate, ...rest } = groupData.recurringSchedule;
@@ -104,7 +109,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     startDate: (startDate as Timestamp).toDate(),
                 };
             }
-            setUserProfile(prev => ({ ...prev, recurringSchedule: schedule }));
+            
+            let overrides: CustodyOverride[] = [];
+            if (groupData?.custodyOverrides) {
+              overrides = groupData.custodyOverrides.map((o: any) => ({
+                ...o,
+                startDate: (o.startDate as Timestamp).toDate(),
+                endDate: (o.endDate as Timestamp).toDate(),
+              }));
+            }
+
+            setUserProfile(prev => ({ ...prev, recurringSchedule: schedule, custodyOverrides: overrides }));
             setLoading(false);
          }, (error) => {
              console.error("Erreur d'écoute du groupe:", error);
@@ -116,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             unsubscribeGroup();
          }
       } else {
-        setUserProfile(prev => ({...prev, recurringSchedule: null}));
+        setUserProfile(prev => ({...prev, recurringSchedule: null, custodyOverrides: []}));
         setLoading(false);
       }
 
@@ -130,8 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const createGroup = async (userId: string, groupName: string) => {
     const groupId = Math.random().toString(36).substring(2, 8).toUpperCase();
-    await setDoc(doc(db, 'groups', groupId), { name: groupName, members: [userId] });
-    // Le créateur devient Parent 1 par défaut et se voit attribuer la première couleur par défaut
+    await setDoc(doc(db, 'groups', groupId), { name: groupName, members: [userId], custodyOverrides: [] });
     const defaultColor = 'hsl(220 70% 50%)';
     await setDoc(doc(db, 'users', userId), { groupId, parentRole: 'Parent 1', color: defaultColor }, { merge: true });
     return groupId;
@@ -143,9 +157,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (groupDoc.exists()) {
       const members = groupDoc.data().members || [];
       if (!members.includes(userId)) {
-        await setDoc(groupDocRef, { members: [...members, userId] }, { merge: true });
+        await updateDoc(groupDocRef, { members: arrayUnion(userId) });
       }
-      // Le deuxième membre devient Parent 2 par défaut et se voit attribuer la deuxième couleur par défaut
       const defaultColor = 'hsl(160 60% 45%)';
       await setDoc(doc(db, 'users', userId), { groupId: groupIdToJoin, parentRole: 'Parent 2', color: defaultColor }, { merge: true });
       return true;
@@ -167,6 +180,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const groupDocRef = doc(db, 'groups', userProfile.groupId);
     await setDoc(groupDocRef, { recurringSchedule: schedule }, { merge: true });
   }
+
+  const addCustodyOverride = async (override: Omit<CustodyOverride, 'id'>) => {
+    if (!userProfile.groupId) throw new Error("L'utilisateur n'est pas dans un groupe.");
+
+    const newOverride: CustodyOverride = {
+      ...override,
+      id: uuidv4(),
+    };
+
+    const groupDocRef = doc(db, 'groups', userProfile.groupId);
+    await updateDoc(groupDocRef, {
+      custodyOverrides: arrayUnion(newOverride)
+    });
+  };
   
   const value = { 
     user, 
@@ -175,11 +202,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     parentRole: userProfile.parentRole, 
     parentColor: userProfile.parentColor,
     recurringSchedule: userProfile.recurringSchedule,
+    custodyOverrides: userProfile.custodyOverrides,
     createGroup, 
     joinGroup, 
     updateParentRole,
     updateRecurringSchedule,
-    updateParentColor
+    updateParentColor,
+    addCustodyOverride,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

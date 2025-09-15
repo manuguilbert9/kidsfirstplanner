@@ -4,17 +4,19 @@ import { useState, useMemo } from 'react';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { mockEvents } from '@/lib/mock-data';
-import type { CustodyEvent, RecurringSchedule } from '@/lib/types';
-import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, isWithinInterval, eachDayOfInterval, differenceInWeeks, getDay, addWeeks, subWeeks, subDays, endOfWeek, addMonths } from 'date-fns';
+import type { CustodyEvent, RecurringSchedule, CustodyOverride } from '@/lib/types';
+import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, endOfMonth, isWithinInterval, eachDayOfInterval, differenceInWeeks, getDay, addWeeks, subWeeks, endOfWeek, addMonths, startOfMonth, isAfter, isBefore, isEqual } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, User, Clock } from 'lucide-react';
+import { MapPin, User, Clock, Scissors } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/use-auth';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { OverrideSheet } from './override-sheet';
 
 function EventCard({ event }: { event: CustodyEvent }) {
   return (
@@ -48,85 +50,98 @@ function EventCard({ event }: { event: CustodyEvent }) {
   );
 }
 
-const generateRecurringEvents = (schedule: RecurringSchedule | null, visibleRange: { start: Date, end: Date }): CustodyEvent[] => {
-    if (!schedule) return [];
-
+const generateRecurringEvents = (
+    schedule: RecurringSchedule | null,
+    overrides: CustodyOverride[],
+    visibleRange: { start: Date, end: Date }
+): CustodyEvent[] => {
+    
     const events: CustodyEvent[] = [];
-    const scheduleStartDate = new Date(schedule.startDate);
     const weekStartsOn = 1; // Lundi
-
-    // Déterminer le parent qui a la garde au début du planning
-    const firstWeekParent = schedule.parentA;
-    const secondWeekParent = schedule.parentB;
-
+    
     const daysToCover = eachDayOfInterval(visibleRange);
 
     daysToCover.forEach(day => {
-        // Calcule la différence en semaines entre le jour actuel et le début du planning
-        const weekDiff = differenceInWeeks(day, scheduleStartDate, { weekStartsOn, locale: fr });
-        
         let currentParent;
-        // La semaine est paire ou impaire ?
-        if (weekDiff % 2 === 0) {
-            currentParent = firstWeekParent; // Semaine du Parent A
-        } else {
-            currentParent = secondWeekParent; // Semaine du Parent B
+
+        // 1. Check for overrides
+        const activeOverride = overrides.find(o => 
+            (isAfter(day, o.startDate) || isEqual(day, o.startDate)) &&
+            (isBefore(day, o.endDate) || isEqual(day, o.endDate))
+        );
+
+        if (activeOverride) {
+            currentParent = activeOverride.parent;
+        } else if (schedule) {
+            // 2. Fallback to recurring schedule
+            const scheduleStartDate = new Date(schedule.startDate);
+            const weekDiff = differenceInWeeks(day, scheduleStartDate, { weekStartsOn, locale: fr });
+            
+            if (weekDiff % 2 === 0) {
+                currentParent = schedule.parentA;
+            } else {
+                currentParent = schedule.parentB;
+            }
         }
 
-        // Crée un "événement" de fond pour la journée entière
-        events.push({
-            id: `bg-${format(day, 'yyyy-MM-dd')}`,
-            title: `Garde ${currentParent}`,
-            start: day,
-            end: addDays(day, 1), // L'événement dure toute la journée
-            parent: currentParent,
-            location: '',
-            description: '',
-            isHandover: false,
-        });
-    });
-
-    // Générer les événements de passation visibles
-    const [handoverHour, handoverMinute] = schedule.handoverTime.split(':').map(Number);
-    
-    // Trouver le premier jour de passation
-    let currentHandover = startOfWeek(scheduleStartDate, { weekStartsOn });
-    currentHandover = addDays(currentHandover, schedule.alternatingWeekDay - 1);
-    if (currentHandover < scheduleStartDate) {
-      currentHandover = addWeeks(currentHandover, 1);
-    }
-    
-    // Reculer pour trouver la première passation potentiellement visible
-    while (currentHandover > visibleRange.start) {
-        currentHandover = subWeeks(currentHandover, 1);
-    }
-     // Avancer pour trouver la première passation dans la vue
-    while (currentHandover < visibleRange.start) {
-        currentHandover = addWeeks(currentHandover, 1);
-    }
-
-
-    while (currentHandover <= visibleRange.end) {
-        const handoverDateTime = setMinutes(setHours(currentHandover, handoverHour), handoverMinute);
-        
-        if (isWithinInterval(handoverDateTime, visibleRange)) {
-            const weekDiff = differenceInWeeks(handoverDateTime, scheduleStartDate, { weekStartsOn, locale: fr });
-            const fromParent = weekDiff % 2 === 0 ? schedule.parentA : schedule.parentB;
-            const toParent = weekDiff % 2 === 0 ? schedule.parentB : schedule.parentA;
-
+        if (currentParent) {
             events.push({
-                id: `handover-${format(handoverDateTime, 'yyyy-MM-dd')}`,
-                title: 'Passation',
-                start: handoverDateTime,
-                end: setMinutes(setHours(handoverDateTime, handoverHour + 1), handoverMinute),
-                parent: toParent, // Le parent qui reçoit l'enfant
-                location: 'Lieu de passation',
-                description: `Passation de ${fromParent} à ${toParent}`,
-                isHandover: true,
+                id: `bg-${format(day, 'yyyy-MM-dd')}`,
+                title: `Garde ${currentParent}`,
+                start: day,
+                end: addDays(day, 1),
+                parent: currentParent,
+                location: '',
+                description: '',
+                isHandover: false,
             });
         }
+    });
+
+    // 3. Generate handover events only if recurring schedule exists
+    if (schedule) {
+        const [handoverHour, handoverMinute] = schedule.handoverTime.split(':').map(Number);
+        const scheduleStartDate = new Date(schedule.startDate);
         
-        currentHandover = addWeeks(currentHandover, 1);
+        let currentHandover = startOfWeek(scheduleStartDate, { weekStartsOn });
+        currentHandover = addDays(currentHandover, getDay(currentHandover) < schedule.alternatingWeekDay ? 
+          schedule.alternatingWeekDay - getDay(currentHandover) : 
+          (7 - getDay(currentHandover) + schedule.alternatingWeekDay) % 7
+        );
+         if (isBefore(currentHandover, scheduleStartDate)) {
+            currentHandover = addWeeks(currentHandover, 1);
+        }
+
+        while (isBefore(currentHandover, visibleRange.start)) {
+            currentHandover = addWeeks(currentHandover, 1);
+        }
+        
+        while (isBefore(currentHandover, visibleRange.end) || isEqual(currentHandover, visibleRange.end)) {
+            const handoverDateTime = setMinutes(setHours(currentHandover, handoverHour), handoverMinute);
+            
+            const isInOverride = overrides.some(o => 
+                (isAfter(handoverDateTime, o.startDate) || isEqual(handoverDateTime, o.startDate)) &&
+                (isBefore(handoverDateTime, o.endDate) || isEqual(handoverDateTime, o.endDate))
+            );
+
+            if (isWithinInterval(handoverDateTime, visibleRange) && !isInOverride) {
+                const weekDiff = differenceInWeeks(handoverDateTime, scheduleStartDate, { weekStartsOn, locale: fr });
+                const fromParent = weekDiff % 2 === 0 ? schedule.parentA : schedule.parentB;
+                const toParent = weekDiff % 2 === 0 ? schedule.parentB : schedule.parentA;
+
+                events.push({
+                    id: `handover-${format(handoverDateTime, 'yyyy-MM-dd')}`,
+                    title: 'Passation',
+                    start: handoverDateTime,
+                    end: setMinutes(setHours(handoverDateTime, handoverHour + 1), handoverMinute),
+                    parent: toParent,
+                    location: 'Lieu de passation',
+                    description: `Passation de ${fromParent} à ${toParent}`,
+                    isHandover: true,
+                });
+            }
+            currentHandover = addWeeks(currentHandover, 1);
+        }
     }
 
 
@@ -144,8 +159,10 @@ export function CustodyCalendarView() {
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [currentMonth, setCurrentMonth] = useState(startOfMonth(new Date()));
   const isMobile = useIsMobile();
-  const { parentRole, recurringSchedule } = useAuth();
+  const { parentRole, recurringSchedule, custodyOverrides } = useAuth();
   const [showRecurring, setShowRecurring] = useState(true);
+  const [overrideSheetOpen, setOverrideSheetOpen] = useState(false);
+  const [contextMenuDate, setContextMenuDate] = useState<Date | null>(null);
 
   const visibleMonths = useMemo(() => {
     const firstDay = startOfMonth(date || currentMonth);
@@ -156,19 +173,26 @@ export function CustodyCalendarView() {
     return months;
   }, [date, currentMonth, isMobile]);
 
-  const { allEvents, parent1Days, parent2Days } = useMemo(() => {
+  const { allEvents, parent1Days, parent2Days, overrideDays } = useMemo(() => {
     const oneTimeEvents = mockEvents;
     const visibleRange = {
       start: startOfWeek(visibleMonths[0], { weekStartsOn: 1, locale: fr }),
       end: endOfWeek(endOfMonth(visibleMonths[visibleMonths.length - 1]), { weekStartsOn: 1, locale: fr })
     };
     
-    const recurring = showRecurring ? generateRecurringEvents(recurringSchedule, visibleRange) : [];
+    const recurring = showRecurring ? generateRecurringEvents(recurringSchedule, custodyOverrides, visibleRange) : [];
 
     const combinedEvents = [...oneTimeEvents, ...recurring];
 
     const p1Days: Date[] = [];
     const p2Days: Date[] = [];
+    
+    const overrides: Date[] = [];
+    custodyOverrides.forEach(o => {
+        const overrideInterval = eachDayOfInterval({start: o.startDate, end: o.endDate});
+        overrides.push(...overrideInterval);
+    })
+
 
     combinedEvents.forEach(event => {
       if (event.isHandover) return;
@@ -179,9 +203,9 @@ export function CustodyCalendarView() {
       }
     });
 
-    return { allEvents: combinedEvents, parent1Days: p1Days, parent2Days: p2Days };
+    return { allEvents: combinedEvents, parent1Days: p1Days, parent2Days: p2Days, overrideDays: overrides };
 
-  }, [recurringSchedule, showRecurring, visibleMonths]);
+  }, [recurringSchedule, showRecurring, visibleMonths, custodyOverrides]);
 
   const eventsForSelectedDay = useMemo(() => {
     return date ? getEventsForDay(date, allEvents) : [];
@@ -194,6 +218,7 @@ export function CustodyCalendarView() {
     today: new Date(),
     parent1: parent1Days,
     parent2: parent2Days,
+    override: overrideDays,
   };
 
   const modifiersClassNames = {
@@ -201,94 +226,136 @@ export function CustodyCalendarView() {
     today: 'bg-accent text-accent-foreground rounded-md',
     parent1: 'day-parent1',
     parent2: 'day-parent2',
+    override: 'relative',
   };
   
   const handleMonthChange = (month: Date) => {
     setCurrentMonth(startOfMonth(month));
   };
+  
+  const handleOverrideClick = (day: Date) => {
+    setContextMenuDate(day);
+    setOverrideSheetOpen(true);
+  }
+
+  const DayWithContextMenu = ({ day }: { day: Date }) => (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+         <div className="relative w-full h-full">
+          {overrideDays.some(d => isSameDay(d, day)) && (
+            <Scissors className="absolute top-1 right-1 w-3 h-3 text-muted-foreground z-10" />
+          )}
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onClick={() => handleOverrideClick(day)}>
+          Changer la garde
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
 
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-      <Card className="flex flex-col lg:col-span-2">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Calendrier</CardTitle>
-                <CardDescription>Sélectionnez un jour pour voir le planning détaillé.</CardDescription>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch 
-                    id="recurring-toggle" 
-                    checked={showRecurring} 
-                    onCheckedChange={setShowRecurring}
-                    disabled={!recurringSchedule}
-                />
-                <Label htmlFor="recurring-toggle">Afficher le récurrent</Label>
-              </div>
-          </div>
-        </CardHeader>
-        <CardContent className="flex justify-center">
-          <Calendar
-            mode="single"
-            selected={date}
-            onSelect={setDate}
-            className="p-0"
-            locale={fr}
-            modifiers={modifiers}
-            modifiersClassNames={modifiersClassNames}
-            numberOfMonths={isMobile ? 1 : 2}
-            month={currentMonth}
-            onMonthChange={handleMonthChange}
-            weekStartsOn={1}
-          />
-        </CardContent>
-         <CardContent className="pt-0">
-          <div className="flex items-center justify-center space-x-4 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-parent1/80"></span>
-              <span>Parent 1 {parentRole === 'Parent 1' && '(Vous)'}</span>
+    <>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <Card className="flex flex-col lg:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Calendrier</CardTitle>
+                  <CardDescription>Sélectionnez un jour pour voir le planning détaillé. Clic droit pour changer une garde.</CardDescription>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch 
+                      id="recurring-toggle" 
+                      checked={showRecurring} 
+                      onCheckedChange={setShowRecurring}
+                      disabled={!recurringSchedule}
+                  />
+                  <Label htmlFor="recurring-toggle">Afficher le récurrent</Label>
+                </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-parent2/80"></span>
-              <span>Parent 2 {parentRole === 'Parent 2' && '(Vous)'}</span>
-            </div>
-             <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
-              <span>Passation</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      <Card className="flex flex-col">
-        <CardHeader>
-          <CardTitle>
-            {date ? format(date, 'd MMMM yyyy', { locale: fr }) : 'Aucune date sélectionnée'}
-          </CardTitle>
-          <CardDescription>
-            {eventsForSelectedDay.length} événement(s) de passation prévu(s).
-          </CardDescription>
-        </CardHeader>
-        <Separator />
-        <ScrollArea className="flex-1">
-          <CardContent className="p-4">
-            {eventsForSelectedDay.length > 0 ? (
-              <div className="space-y-4">
-                {eventsForSelectedDay.map((event) => (
-                  <EventCard key={event.id} event={event} />
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-                <p>Aucun événement de passation pour ce jour.</p>
-                <p className="text-xs">Les jours de garde sont indiqués par la couleur de fond.</p>
-              </div>
-            )}
+          </CardHeader>
+          <CardContent className="flex justify-center">
+            <Calendar
+              mode="single"
+              selected={date}
+              onSelect={setDate}
+              className="p-0"
+              locale={fr}
+              modifiers={modifiers}
+              modifiersClassNames={modifiersClassNames}
+              numberOfMonths={isMobile ? 1 : 2}
+              month={currentMonth}
+              onMonthChange={handleMonthChange}
+              weekStartsOn={1}
+              components={{
+                DayContent: (props) => (
+                  <div className="relative w-full h-full">
+                    <DayWithContextMenu day={props.date} />
+                    <span className="absolute -translate-x-1/2 -translate-y-1/2 top-1/2 left-1/2">
+                      {format(props.date, 'd')}
+                    </span>
+                  </div>
+                ),
+              }}
+            />
           </CardContent>
-        </ScrollArea>
-      </Card>
-    </div>
+          <CardContent className="pt-0">
+            <div className="flex items-center justify-center space-x-4 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-parent1/80"></span>
+                <span>Parent 1 {parentRole === 'Parent 1' && '(Vous)'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-parent2/80"></span>
+                <span>Parent 2 {parentRole === 'Parent 2' && '(Vous)'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                <span>Passation</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Scissors className="w-3 h-3" />
+                <span>Garde changée</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="flex flex-col">
+          <CardHeader>
+            <CardTitle>
+              {date ? format(date, 'd MMMM yyyy', { locale: fr }) : 'Aucune date sélectionnée'}
+            </CardTitle>
+            <CardDescription>
+              {eventsForSelectedDay.length} événement(s) de passation prévu(s).
+            </CardDescription>
+          </CardHeader>
+          <Separator />
+          <ScrollArea className="flex-1">
+            <CardContent className="p-4">
+              {eventsForSelectedDay.length > 0 ? (
+                <div className="space-y-4">
+                  {eventsForSelectedDay.map((event) => (
+                    <EventCard key={event.id} event={event} />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
+                  <p>Aucun événement de passation pour ce jour.</p>
+                  <p className="text-xs">Les jours de garde sont indiqués par la couleur de fond.</p>
+                </div>
+              )}
+            </CardContent>
+          </ScrollArea>
+        </Card>
+      </div>
+      <OverrideSheet 
+        open={overrideSheetOpen}
+        onOpenChange={setOverrideSheetOpen}
+        startDate={contextMenuDate}
+      />
+    </>
   );
 }
-
-    

@@ -19,6 +19,14 @@ export type RecurringSchedule = {
   startDate: Date;
 };
 
+export type CustodyOverride = {
+  id: string;
+  startDate: Date;
+  endDate: Date;
+  parent: ParentRole;
+  reason: string;
+};
+
 export interface UserProfileData {
   groupId: string;
   parentRole: ParentRole;
