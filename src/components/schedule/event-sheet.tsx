@@ -53,8 +53,8 @@ export function EventSheet({ open, onOpenChange }: EventSheetProps) {
       setIsLoading(false);
       onOpenChange(false);
       toast({
-        title: 'Event Created',
-        description: 'The new custody event has been added to the schedule.',
+        title: 'Événement créé',
+        description: 'Le nouvel événement de garde a été ajouté au calendrier.',
       });
     }, 1500);
   };
@@ -64,21 +64,21 @@ export function EventSheet({ open, onOpenChange }: EventSheetProps) {
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent className="sm:max-w-lg">
           <SheetHeader>
-            <SheetTitle>Create New Event</SheetTitle>
+            <SheetTitle>Créer un nouvel événement</SheetTitle>
             <SheetDescription>
-              Add a new event to the custody schedule.
+              Ajoutez un nouvel événement au calendrier de garde.
             </SheetDescription>
           </SheetHeader>
           <Tabs defaultValue="one-time" className="mt-4">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="one-time">One-Time</TabsTrigger>
-              <TabsTrigger value="recurring">Recurring</TabsTrigger>
+              <TabsTrigger value="one-time">Ponctuel</TabsTrigger>
+              <TabsTrigger value="recurring">Récurrent</TabsTrigger>
             </TabsList>
             <TabsContent value="one-time">
               <form onSubmit={handleSubmit} className="py-4 space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="title">Event Title</Label>
-                  <Input id="title" placeholder="e.g., School Drop-off" required />
+                  <Label htmlFor="title">Titre de l'événement</Label>
+                  <Input id="title" placeholder="ex: Dépôt à l'école" required />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -90,11 +90,11 @@ export function EventSheet({ open, onOpenChange }: EventSheetProps) {
                     <Label htmlFor="parent">Parent</Label>
                     <Select required>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select parent" />
+                        <SelectValue placeholder="Sélectionner le parent" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="parent-a">Parent A</SelectItem>
-                        <SelectItem value="parent-b">Parent B</SelectItem>
+                        <SelectItem value="parent-a">Parent 1</SelectItem>
+                        <SelectItem value="parent-b">Parent 2</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -102,23 +102,23 @@ export function EventSheet({ open, onOpenChange }: EventSheetProps) {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="start-time">Start Time</Label>
+                    <Label htmlFor="start-time">Heure de début</Label>
                     <Input id="start-time" type="time" required />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="end-time">End Time</Label>
+                    <Label htmlFor="end-time">Heure de fin</Label>
                     <Input id="end-time" type="time" required />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="location">Location</Label>
-                  <Input id="location" placeholder="e.g., 123 Main St" required />
+                  <Label htmlFor="location">Lieu</Label>
+                  <Input id="location" placeholder="ex: 123 Rue Principale" required />
                 </div>
                 
                 <div className="flex items-center space-x-2">
                   <Switch id="handover" />
-                  <Label htmlFor="handover">Is this a handover event?</Label>
+                  <Label htmlFor="handover">Est-ce un événement de passation ?</Label>
                 </div>
 
                 <Button
@@ -128,19 +128,19 @@ export function EventSheet({ open, onOpenChange }: EventSheetProps) {
                   onClick={() => setSuggestionModalOpen(true)}
                 >
                   <Sparkles className="w-4 h-4 mr-2 text-accent" />
-                  Suggest Handover Time
+                  Suggérer une heure de passation
                 </Button>
 
                 <div className="space-y-2">
-                  <Label htmlFor="description">Description (Optional)</Label>
-                  <Textarea id="description" placeholder="Add any extra details" />
+                  <Label htmlFor="description">Description (facultatif)</Label>
+                  <Textarea id="description" placeholder="Ajoutez des détails supplémentaires" />
                 </div>
                 
                 <SheetFooter className="pt-4">
-                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
                   <Button type="submit" disabled={isLoading} className="bg-gradient-to-r from-[#FF8C00] via-[#E2583E] to-[#F472D0] text-white">
                     {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    Save Event
+                    Sauvegarder l'événement
                   </Button>
                 </SheetFooter>
               </form>
@@ -156,19 +156,19 @@ export function EventSheet({ open, onOpenChange }: EventSheetProps) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-accent" />
-              Suggest Optimal Handover Time
+              Suggérer une heure de passation optimale
             </DialogTitle>
             <DialogDescription>
-              Let AI find the best time for a handover, considering traffic and
-              other factors.
+              Laissez l'IA trouver le meilleur moment pour une passation, en tenant compte du trafic et
+              d'autres facteurs.
             </DialogDescription>
           </DialogHeader>
           <SuggestionForm
             onSuggestion={(time) => {
-              // This would update the form fields in a real implementation
+              // Ceci mettrait à jour les champs du formulaire dans une implémentation réelle
               toast({
-                title: "Time Updated",
-                description: `Event time has been set to the AI's suggestion: ${time}`,
+                title: "Heure mise à jour",
+                description: `L'heure de l'événement a été définie sur la suggestion de l'IA : ${time}`,
               });
               setSuggestionModalOpen(false);
             }}

@@ -41,7 +41,7 @@ export default function GroupSetupPage() {
   const handleCreateGroup = async () => {
     if (!user) return;
     if (!groupName.trim()) {
-        setError('Please enter a name for your group.');
+        setError('Veuillez donner un nom à votre groupe.');
         return;
     }
     setIsCreating(true);
@@ -49,13 +49,13 @@ export default function GroupSetupPage() {
     try {
       const newGroupId = await createGroup(user.uid, groupName);
       toast({
-        title: 'Group Created!',
-        description: `Your new group code is: ${newGroupId}. Share it with the other parent.`,
+        title: 'Groupe créé !',
+        description: `Le code de votre nouveau groupe est : ${newGroupId}. Partagez-le avec l'autre parent.`,
       });
       router.push('/');
     } catch (e) {
       console.error(e);
-      setError('Failed to create group. Please try again.');
+      setError('La création du groupe a échoué. Veuillez réessayer.');
       setIsCreating(false);
     }
   };
@@ -63,7 +63,7 @@ export default function GroupSetupPage() {
   const handleJoinGroup = async () => {
     if (!user) return;
      if (!joinCode.trim()) {
-        setError('Please enter a group code to join.');
+        setError('Veuillez entrer un code de groupe pour le rejoindre.');
         return;
     }
     setIsJoining(true);
@@ -72,17 +72,17 @@ export default function GroupSetupPage() {
       const success = await joinGroup(user.uid, joinCode.trim().toUpperCase());
       if (success) {
         toast({
-          title: 'Successfully Joined Group!',
-          description: 'You are now ready to view the shared schedule.',
+          title: 'Groupe rejoint avec succès !',
+          description: 'Vous êtes maintenant prêt à consulter le calendrier partagé.',
         });
         router.push('/');
       } else {
-        setError('Invalid group code. Please check the code and try again.');
+        setError('Code de groupe invalide. Veuillez vérifier le code et réessayer.');
         setIsJoining(false);
       }
     } catch (e) {
       console.error(e);
-      setError('Failed to join group. Please try again.');
+      setError('Impossible de rejoindre le groupe. Veuillez réessayer.');
       setIsJoining(false);
     }
   };
@@ -93,9 +93,9 @@ export default function GroupSetupPage() {
         <div className="flex flex-col items-center mb-8">
             <KidsFirstLogo className="w-16 h-16 mb-4" />
              <h1 className="text-3xl font-bold font-headline bg-gradient-to-r from-[#FF8C00] via-[#E2583E] to-[#F472D0] text-transparent bg-clip-text">
-                Set Up Your Family Group
+                Configurez votre groupe familial
             </h1>
-            <p className="text-muted-foreground mt-2 text-center">To share a schedule, you need to be in a group with the other parent.</p>
+            <p className="text-muted-foreground mt-2 text-center">Pour partager un calendrier, vous devez être dans un groupe avec l'autre parent.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -105,23 +105,23 @@ export default function GroupSetupPage() {
                         <div className="bg-primary/20 p-2 rounded-full">
                             <Plus className="w-6 h-6 text-primary" />
                         </div>
-                        <CardTitle>Create a New Group</CardTitle>
+                        <CardTitle>Créer un nouveau groupe</CardTitle>
                     </div>
-                    <CardDescription>Start a new schedule. You'll get a unique code to invite the other parent.</CardDescription>
+                    <CardDescription>Démarrez un nouveau calendrier. Vous obtiendrez un code unique pour inviter l'autre parent.</CardDescription>
                 </CardHeader>
                 <CardContent className="flex-grow flex flex-col justify-between">
                     <div className="space-y-2">
-                        <label htmlFor="groupName" className="text-sm font-medium">Group Name</label>
+                        <label htmlFor="groupName" className="text-sm font-medium">Nom du groupe</label>
                         <Input 
                             id="groupName"
-                            placeholder="e.g., The Smith Kids" 
+                            placeholder="ex: Les enfants Smith" 
                             value={groupName}
                             onChange={(e) => setGroupName(e.target.value)}
                         />
                     </div>
                     <Button onClick={handleCreateGroup} disabled={isCreating || !groupName.trim()} className="w-full mt-4">
                         {isCreating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                        Create Group
+                        Créer un groupe
                     </Button>
                 </CardContent>
             </Card>
@@ -132,16 +132,16 @@ export default function GroupSetupPage() {
                         <div className="bg-primary/20 p-2 rounded-full">
                             <LogIn className="w-6 h-6 text-primary" />
                         </div>
-                        <CardTitle>Join an Existing Group</CardTitle>
+                        <CardTitle>Rejoindre un groupe existant</CardTitle>
                     </div>
-                    <CardDescription>If the other parent has already created a group, enter the code they shared with you.</CardDescription>
+                    <CardDescription>Si l'autre parent a déjà créé un groupe, entrez le code qu'il vous a partagé.</CardDescription>
                 </CardHeader>
                 <CardContent className="flex-grow flex flex-col justify-between">
                      <div className="space-y-2">
-                        <label htmlFor="joinCode" className="text-sm font-medium">Group Code</label>
+                        <label htmlFor="joinCode" className="text-sm font-medium">Code du groupe</label>
                         <Input
                             id="joinCode"
-                            placeholder="Enter 6-digit code"
+                            placeholder="Entrez le code à 6 chiffres"
                             value={joinCode}
                             onChange={(e) => setJoinCode(e.target.value)}
                             maxLength={6}
@@ -149,7 +149,7 @@ export default function GroupSetupPage() {
                     </div>
                     <Button onClick={handleJoinGroup} disabled={isJoining || !joinCode.trim()} className="w-full mt-4">
                          {isJoining && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                        Join Group
+                        Rejoindre le groupe
                     </Button>
                 </CardContent>
             </Card>

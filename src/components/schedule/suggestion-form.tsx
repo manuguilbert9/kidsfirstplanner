@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,11 +15,11 @@ import { suggestOptimalMeetingTimes } from '@/app/actions';
 import { Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
-  startLocation: z.string().min(1, 'Start location is required.'),
-  endLocation: z.string().min(1, 'End location is required.'),
-  date: z.string().min(1, 'Date is required.'),
-  startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format.'),
-  endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format.'),
+  startLocation: z.string().min(1, 'Le lieu de départ est requis.'),
+  endLocation: z.string().min(1, 'Le lieu de destination est requis.'),
+  date: z.string().min(1, 'La date est requise.'),
+  startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Format de l\'heure invalide.'),
+  endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Format de l\'heure invalide.'),
 });
 
 type SuggestionFormValues = z.infer<typeof formSchema>;
@@ -84,9 +85,9 @@ export function SuggestionForm({ onSuggestion }: SuggestionFormProps) {
               name="startLocation"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Start Location</FormLabel>
+                  <FormLabel>Lieu de départ</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Parent A's home" {...field} />
+                    <Input placeholder="ex: Maison du Parent 1" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -97,9 +98,9 @@ export function SuggestionForm({ onSuggestion }: SuggestionFormProps) {
               name="endLocation"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>End Location</FormLabel>
+                  <FormLabel>Lieu de destination</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., School" {...field} />
+                    <Input placeholder="ex: École" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -127,7 +128,7 @@ export function SuggestionForm({ onSuggestion }: SuggestionFormProps) {
             name="startTime"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Earliest Time</FormLabel>
+                <FormLabel>Heure la plus proche</FormLabel>
                 <FormControl>
                   <Input type="time" {...field} />
                 </FormControl>
@@ -140,7 +141,7 @@ export function SuggestionForm({ onSuggestion }: SuggestionFormProps) {
             name="endTime"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Latest Time</FormLabel>
+                <FormLabel>Heure la plus tardive</FormLabel>
                 <FormControl>
                   <Input type="time" {...field} />
                 </FormControl>
@@ -152,16 +153,16 @@ export function SuggestionForm({ onSuggestion }: SuggestionFormProps) {
         
         {error && (
             <Alert variant="destructive">
-                <AlertTitle>Error</AlertTitle>
+                <AlertTitle>Erreur</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
             </Alert>
         )}
 
         {result && (
             <Alert variant="default" className="border-accent text-accent-foreground">
-                <AlertTitle>Suggestion Found!</AlertTitle>
+                <AlertTitle>Suggestion trouvée !</AlertTitle>
                 <AlertDescription>
-                    <p className="font-bold">Suggested Time: {format(new Date(result.suggestedTime), 'p')}</p>
+                    <p className="font-bold">Heure suggérée : {format(new Date(result.suggestedTime), 'p', { locale: fr })}</p>
                     <p className="text-xs">{result.reason}</p>
                 </AlertDescription>
             </Alert>
@@ -171,12 +172,12 @@ export function SuggestionForm({ onSuggestion }: SuggestionFormProps) {
             {!result && (
                 <Button type="submit" disabled={loading} className="w-full">
                     {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    Get Suggestion
+                    Obtenir une suggestion
                 </Button>
             )}
              {result && (
                 <Button type="button" onClick={handleAcceptSuggestion} className="w-full bg-gradient-to-r from-[#FF8C00] via-[#E2583E] to-[#F472D0] text-white">
-                    Accept Suggestion
+                    Accepter la suggestion
                 </Button>
             )}
         </div>

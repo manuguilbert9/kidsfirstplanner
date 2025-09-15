@@ -13,15 +13,15 @@ export default function SharePage({ params }: { params: { id: string } }) {
             <h1 className="text-lg font-bold font-headline bg-gradient-to-r from-[#FF8C00] via-[#E2583E] to-[#F472D0] text-transparent bg-clip-text">
                 KidsFirst Planner
             </h1>
-            <p className="text-xs text-muted-foreground">Viewing a shared schedule</p>
+            <p className="text-xs text-muted-foreground">Consultation d'un calendrier partagé</p>
           </div>
         </div>
         <Button asChild>
-          <Link href="/">Create Your Own</Link>
+          <Link href="/">Créez le vôtre</Link>
         </Button>
       </header>
       <main className="flex-1 p-4 md:p-6">
-        {/* In a real app, this would be passed a prop to disable editing */}
+        {/* Dans une vraie application, une prop serait passée pour désactiver l'édition */}
         <CustodyCalendarView />
       </main>
     </div>

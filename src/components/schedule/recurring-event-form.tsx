@@ -29,8 +29,8 @@ import { Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
   alternatingWeekDay: z.coerce.number().min(0).max(6),
-  handoverTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format.'),
-  startDate: z.string().min(1, 'Start date is required.'),
+  handoverTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Format de l\'heure invalide.'),
+  startDate: z.string().min(1, 'La date de début est requise.'),
 });
 
 type RecurringFormValues = z.infer<typeof formSchema>;
@@ -40,13 +40,13 @@ interface RecurringEventFormProps {
 }
 
 const weekdays = [
-  { value: 0, label: 'Sunday' },
-  { value: 1, label: 'Monday' },
-  { value: 2, label: 'Tuesday' },
-  { value: 3, label: 'Wednesday' },
-  { value: 4, label: 'Thursday' },
-  { value: 5, label: 'Friday' },
-  { value: 6, label: 'Saturday' },
+  { value: 0, label: 'Dimanche' },
+  { value: 1, label: 'Lundi' },
+  { value: 2, label: 'Mardi' },
+  { value: 3, label: 'Mercredi' },
+  { value: 4, label: 'Jeudi' },
+  { value: 5, label: 'Vendredi' },
+  { value: 6, label: 'Samedi' },
 ];
 
 export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
@@ -64,14 +64,14 @@ export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
 
   const onSubmit = async (values: RecurringFormValues) => {
     setLoading(true);
-    // In a real app, you'd save this to a database
-    console.log('Recurring schedule submitted:', values);
+    // Dans une vraie application, vous enregistreriez cela dans une base de données
+    console.log('Calendrier récurrent soumis :', values);
 
     setTimeout(() => {
       setLoading(false);
       toast({
-        title: 'Schedule Updated',
-        description: 'The recurring schedule has been saved.',
+        title: 'Calendrier mis à jour',
+        description: 'Le calendrier récurrent a été enregistré.',
       });
       onSave();
     }, 1000);
@@ -85,11 +85,11 @@ export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
           name="alternatingWeekDay"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Handover Day</FormLabel>
+              <FormLabel>Jour de passation</FormLabel>
               <Select onValueChange={(value) => field.onChange(Number(value))} defaultValue={String(field.value)}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select the day of the week for handover" />
+                    <SelectValue placeholder="Sélectionnez le jour de la semaine pour la passation" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -110,7 +110,7 @@ export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
           name="handoverTime"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Handover Time</FormLabel>
+              <FormLabel>Heure de passation</FormLabel>
               <FormControl>
                 <Input type="time" {...field} />
               </FormControl>
@@ -124,7 +124,7 @@ export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
           name="startDate"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Start Date</FormLabel>
+              <FormLabel>Date de début</FormLabel>
               <FormControl>
                 <Input type="date" {...field} />
               </FormControl>
@@ -134,13 +134,13 @@ export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
         />
         
         <p className="text-xs text-muted-foreground">
-            The schedule will alternate weekly between Parent A and Parent B, starting from the specified date.
+            Le calendrier alternera chaque semaine entre le Parent 1 et le Parent 2, à partir de la date spécifiée.
         </p>
 
         <div className="flex justify-end pt-4 space-x-2">
           <Button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-[#FF8C00] via-[#E2583E] to-[#F472D0] text-white">
             {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            Save Recurring Schedule
+            Enregistrer le calendrier récurrent
           </Button>
         </div>
       </form>

@@ -7,17 +7,17 @@ import {
 import { z } from 'zod';
 
 const SuggestOptimalMeetingTimesServerInput = z.object({
-  startLocation: z.string().min(1, 'Start location is required.'),
-  endLocation: z.string().min(1, 'End location is required.'),
+  startLocation: z.string().min(1, 'Le lieu de départ est requis.'),
+  endLocation: z.string().min(1, 'Le lieu d\'arrivée est requis.'),
   date: z.date(),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Invalid start time format.'),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Invalid end time format.'),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Format de l\'heure de début invalide.'),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Format de l\'heure de fin invalide.'),
 });
 
 export async function suggestOptimalMeetingTimes(input: unknown) {
   const parsedInput = SuggestOptimalMeetingTimesServerInput.safeParse(input);
   if (!parsedInput.success) {
-    return { error: 'Invalid input.', details: parsedInput.error.format() };
+    return { error: 'Entrée invalide.', details: parsedInput.error.format() };
   }
 
   const { date, startTime, endTime, startLocation, endLocation } = parsedInput.data;
@@ -31,7 +31,7 @@ export async function suggestOptimalMeetingTimes(input: unknown) {
   endDateTime.setHours(endHours, endMinutes, 0, 0);
 
   if (startDateTime >= endDateTime) {
-    return { error: 'Start time must be before end time.' };
+    return { error: 'L\'heure de début doit être antérieure à l\'heure de fin.' };
   }
 
   const flowInput: SuggestOptimalMeetingTimesInput = {
@@ -46,6 +46,6 @@ export async function suggestOptimalMeetingTimes(input: unknown) {
     return { success: true, data: result };
   } catch (e) {
     console.error(e);
-    return { error: 'Failed to get suggestion from AI. Please try again later.' };
+    return { error: 'Échec de l\'obtention de la suggestion de l\'IA. Veuillez réessayer plus tard.' };
   }
 }

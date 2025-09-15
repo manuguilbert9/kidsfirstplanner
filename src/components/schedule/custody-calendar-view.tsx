@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { mockEvents } from '@/lib/mock-data';
 import type { CustodyEvent, RecurringSchedule } from '@/lib/types';
 import { format, isSameDay, getDay, addDays, setHours, setMinutes, startOfWeek, endOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, areIntervalsOverlapping } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -27,14 +28,14 @@ function EventCard({ event }: { event: CustodyEvent }) {
               {event.parent}
             </CardDescription>
           </div>
-          {event.isHandover && <Badge variant="secondary">Handover</Badge>}
+          {event.isHandover && <Badge variant="secondary">Passation</Badge>}
         </div>
       </CardHeader>
       <CardContent className="p-4 pt-0 space-y-2 text-sm text-muted-foreground">
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4" />
           <span>
-            {format(event.start, 'p')} - {format(event.end, 'p')}
+            {format(event.start, 'p', { locale: fr })} - {format(event.end, 'p', { locale: fr })}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -51,11 +52,11 @@ const generateRecurringEvents = (schedule: RecurringSchedule | null, visibleRang
     if (!schedule) return [];
 
     const events: CustodyEvent[] = [];
-    const weeks = eachWeekOfInterval(visibleRange, { weekStartsOn: schedule.alternatingWeekDay as any });
+    const weeks = eachWeekOfInterval(visibleRange, { weekStartsOn: schedule.alternatingWeekDay as any, locale: fr });
     const [handoverHour, handoverMinute] = schedule.handoverTime.split(':').map(Number);
     
     let isParentAWeek = true;
-    const scheduleStartWeek = startOfWeek(schedule.startDate, { weekStartsOn: schedule.alternatingWeekDay as any });
+    const scheduleStartWeek = startOfWeek(schedule.startDate, { weekStartsOn: schedule.alternatingWeekDay as any, locale: fr });
 
     for (const weekStart of weeks) {
         if (weekStart < scheduleStartWeek) continue;
@@ -71,12 +72,12 @@ const generateRecurringEvents = (schedule: RecurringSchedule | null, visibleRang
 
         const event: CustodyEvent = {
             id: `recurring-${weekStart.toISOString()}`,
-            title: `Custody Week`,
+            title: `Semaine de garde`,
             start: handoverDateTime,
             end: endOfCustodyWeek,
             parent: currentParent,
-            location: 'Alternating',
-            description: `Week with ${currentParent}. Handover to ${nextParent} at the end.`,
+            location: 'Alternance',
+            description: `Semaine avec ${currentParent}. Passation à ${nextParent} à la fin.`,
             isHandover: true,
         };
         events.push(event);
@@ -99,8 +100,8 @@ export function CustodyCalendarView() {
   const [recurringSchedule, setRecurringSchedule] = useState<RecurringSchedule | null>({
       alternatingWeekDay: 5, // Friday
       handoverTime: '18:00',
-      parentA: 'Parent A',
-      parentB: 'Parent B',
+      parentA: 'Parent 1',
+      parentB: 'Parent 2',
       startDate: new Date(),
   });
 
@@ -120,7 +121,7 @@ export function CustodyCalendarView() {
 
     const recurringEvents = generateRecurringEvents(recurringSchedule, visibleRange)
         .filter(re => {
-            // Filter out recurring events that overlap with one-time handovers
+            // Filtrer les événements récurrents qui chevauchent les passations ponctuelles
             return !oneTimeEvents.some(ote => 
                 ote.isHandover && areIntervalsOverlapping(
                     {start: ote.start, end: ote.end},
@@ -145,8 +146,8 @@ export function CustodyCalendarView() {
         <CardHeader>
           <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Schedule</CardTitle>
-                <CardDescription>Select a day to see the detailed schedule.</CardDescription>
+                <CardTitle>Calendrier</CardTitle>
+                <CardDescription>Sélectionnez un jour pour voir le planning détaillé.</CardDescription>
               </div>
               <div className="flex items-center space-x-2">
                 <Switch 
@@ -155,7 +156,7 @@ export function CustodyCalendarView() {
                     onCheckedChange={setShowRecurring}
                     disabled={!recurringSchedule}
                 />
-                <Label htmlFor="recurring-toggle">Show Recurring</Label>
+                <Label htmlFor="recurring-toggle">Afficher le récurrent</Label>
               </div>
           </div>
         </CardHeader>
@@ -165,6 +166,7 @@ export function CustodyCalendarView() {
             selected={date}
             onSelect={setDate}
             className="p-0"
+            locale={fr}
             modifiers={{
                 hasEvent: eventDays,
                 today: new Date(),
@@ -180,10 +182,10 @@ export function CustodyCalendarView() {
       <Card className="flex flex-col">
         <CardHeader>
           <CardTitle>
-            {date ? format(date, 'MMMM d, yyyy') : 'No date selected'}
+            {date ? format(date, 'd MMMM yyyy', { locale: fr }) : 'Aucune date sélectionnée'}
           </CardTitle>
           <CardDescription>
-            {eventsForSelectedDay.length} event(s) scheduled.
+            {eventsForSelectedDay.length} événement(s) prévu(s).
           </CardDescription>
         </CardHeader>
         <Separator />
@@ -197,8 +199,8 @@ export function CustodyCalendarView() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-                <p>No events for this day.</p>
-                <p className="text-xs">Select a day with a dot to see events.</p>
+                <p>Aucun événement pour ce jour.</p>
+                <p className="text-xs">Sélectionnez un jour avec un point pour voir les événements.</p>
               </div>
             )}
           </CardContent>

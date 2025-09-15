@@ -14,8 +14,8 @@ export function HeaderActions() {
 
   const handleExport = () => {
     toast({
-      title: 'Exporting Calendar',
-      description: 'Your calendar is being prepared for download.',
+      title: 'Exportation du calendrier',
+      description: 'Votre calendrier est en cours de préparation pour le téléchargement.',
     });
   };
 
@@ -23,8 +23,8 @@ export function HeaderActions() {
     const shareUrl = `${window.location.origin}/share/schedule-123`;
     navigator.clipboard.writeText(shareUrl).then(() => {
       toast({
-        title: 'Link Copied!',
-        description: 'A shareable link has been copied to your clipboard.',
+        title: 'Lien copié !',
+        description: 'Un lien partageable a été copié dans votre presse-papiers.',
       });
     });
   };
@@ -37,14 +37,14 @@ export function HeaderActions() {
           onClick={() => setSheetOpen(true)}
           className="font-bold text-white bg-gradient-to-r from-[#FF8C00] via-[#E2583E] to-[#F472D0] hover:opacity-90 transition-opacity"
         >
-          <Plus className="w-4 h-4 mr-2" /> New Event
+          <Plus className="w-4 h-4 mr-2" /> Nouvel événement
         </Button>
         <div className="hidden md:flex gap-2">
             <Button variant="outline" size="sm" onClick={handleExport}>
-              <Download className="w-4 h-4 mr-2" /> Export
+              <Download className="w-4 h-4 mr-2" /> Exporter
             </Button>
             <Button variant="outline" size="sm" onClick={handleShare}>
-              <Share2 className="w-4 h-4 mr-2" /> Share
+              <Share2 className="w-4 h-4 mr-2" /> Partager
             </Button>
         </div>
       </div>

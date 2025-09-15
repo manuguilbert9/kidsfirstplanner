@@ -26,7 +26,7 @@ export default function Home() {
     return (
        <div className="flex flex-col min-h-screen bg-background items-center justify-center">
         <Loader2 className="w-12 h-12 animate-spin text-primary" />
-        <p className="mt-4 text-muted-foreground">Loading your schedule...</p>
+        <p className="mt-4 text-muted-foreground">Chargement de votre calendrier...</p>
       </div>
     );
   }
