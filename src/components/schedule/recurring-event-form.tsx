@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -26,9 +25,10 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { useAuth } from '@/hooks/use-auth';
 
 const formSchema = z.object({
-  alternatingWeekDay: z.coerce.number().min(0).max(6),
+  alternatingWeekDay: z.coerce.number().min(1).max(7),
   handoverTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Format de l\'heure invalide.'),
   startDate: z.string().min(1, 'La date de début est requise.'),
 });
@@ -40,18 +40,19 @@ interface RecurringEventFormProps {
 }
 
 const weekdays = [
-  { value: 0, label: 'Dimanche' },
   { value: 1, label: 'Lundi' },
   { value: 2, label: 'Mardi' },
   { value: 3, label: 'Mercredi' },
   { value: 4, label: 'Jeudi' },
   { value: 5, label: 'Vendredi' },
   { value: 6, label: 'Samedi' },
+  { value: 7, label: 'Dimanche' },
 ];
 
 export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { updateRecurringSchedule, recurringSchedule } = useAuth();
 
   const form = useForm<RecurringFormValues>({
     resolver: zodResolver(formSchema),
@@ -62,19 +63,39 @@ export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
     },
   });
 
+  useEffect(() => {
+    if (recurringSchedule) {
+      form.reset({
+        alternatingWeekDay: recurringSchedule.alternatingWeekDay,
+        handoverTime: recurringSchedule.handoverTime,
+        startDate: format(new Date(recurringSchedule.startDate), 'yyyy-MM-dd'),
+      });
+    }
+  }, [recurringSchedule, form]);
+
   const onSubmit = async (values: RecurringFormValues) => {
     setLoading(true);
-    // Dans une vraie application, vous enregistreriez cela dans une base de données
-    console.log('Calendrier récurrent soumis :', values);
-
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await updateRecurringSchedule({
+        alternatingWeekDay: values.alternatingWeekDay,
+        handoverTime: values.handoverTime,
+        startDate: new Date(values.startDate),
+      });
       toast({
         title: 'Calendrier mis à jour',
         description: 'Le calendrier récurrent a été enregistré.',
       });
       onSave();
-    }, 1000);
+    } catch (error) {
+      console.error(error);
+      toast({
+        variant: 'destructive',
+        title: 'Erreur',
+        description: 'Impossible d\'enregistrer le calendrier récurrent.',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -86,7 +107,7 @@ export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Jour de passation</FormLabel>
-              <Select onValueChange={(value) => field.onChange(Number(value))} defaultValue={String(field.value)}>
+              <Select onValueChange={(value) => field.onChange(Number(value))} value={String(field.value)}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Sélectionnez le jour de la semaine pour la passation" />
@@ -147,5 +168,3 @@ export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
     </Form>
   );
 }
-
-    

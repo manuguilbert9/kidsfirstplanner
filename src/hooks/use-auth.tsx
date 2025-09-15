@@ -6,25 +6,28 @@ import {
   useState,
   useEffect,
   ReactNode,
-  useCallback,
 } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import type { ParentRole } from '@/lib/types';
+import { doc, getDoc, setDoc, onSnapshot, Timestamp } from 'firebase/firestore';
+import type { ParentRole, RecurringSchedule } from '@/lib/types';
 
 interface UserProfile {
   groupId: string | null;
   parentRole: ParentRole | null;
+  recurringSchedule: RecurringSchedule | null;
 }
 interface AuthContextType {
   user: User | null;
+
   loading: boolean;
   groupId: string | null;
   parentRole: ParentRole | null;
+  recurringSchedule: RecurringSchedule | null;
   createGroup: (userId: string, groupName: string) => Promise<string>;
   joinGroup: (userId: string, groupId: string) => Promise<boolean>;
   updateParentRole: (userId: string, role: ParentRole) => Promise<void>;
+  updateRecurringSchedule: (schedule: Omit<RecurringSchedule, 'parentA' | 'parentB'>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,13 +35,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [userProfile, setUserProfile] = useState<UserProfile>({ groupId: null, parentRole: null });
+  const [userProfile, setUserProfile] = useState<UserProfile>({ groupId: null, parentRole: null, recurringSchedule: null });
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (!user) {
-        setUserProfile({ groupId: null, parentRole: null });
+        setUserProfile({ groupId: null, parentRole: null, recurringSchedule: null });
         setLoading(false);
       }
     });
@@ -47,27 +50,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    };
 
     setLoading(true);
     const userDocRef = doc(db, 'users', user.uid);
-    const unsubscribeSnapshot = onSnapshot(userDocRef, (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        setUserProfile({
-          groupId: data.groupId || null,
-          parentRole: data.parentRole || null,
-        });
+    
+    const unsubscribeUser = onSnapshot(userDocRef, (doc) => {
+      const userData = doc.data();
+      const currentGroupId = userData?.groupId || null;
+      
+      setUserProfile(prev => ({
+        ...prev,
+        groupId: currentGroupId,
+        parentRole: userData?.parentRole || null,
+      }));
+
+      if (currentGroupId) {
+         const groupDocRef = doc(db, 'groups', currentGroupId);
+         const unsubscribeGroup = onSnapshot(groupDocRef, (groupDoc) => {
+            const groupData = groupDoc.data();
+            let schedule: RecurringSchedule | null = null;
+            if (groupData?.recurringSchedule) {
+                const { startDate, ...rest } = groupData.recurringSchedule;
+                schedule = {
+                    ...rest,
+                    startDate: (startDate as Timestamp).toDate(),
+                };
+            }
+            setUserProfile(prev => ({ ...prev, recurringSchedule: schedule }));
+            setLoading(false);
+         }, (error) => {
+             console.error("Erreur d'écoute du groupe:", error);
+             setLoading(false);
+         });
+         return unsubscribeGroup;
       } else {
-        setUserProfile({ groupId: null, parentRole: null });
+        setUserProfile(prev => ({...prev, recurringSchedule: null}));
+        setLoading(false);
       }
-      setLoading(false);
+
     }, (error) => {
       console.error("Erreur d'écoute du profil utilisateur:", error);
       setLoading(false);
     });
 
-    return () => unsubscribeSnapshot();
+    return () => unsubscribeUser();
   }, [user]);
 
   const createGroup = async (userId: string, groupName: string) => {
@@ -96,15 +126,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateParentRole = async (userId: string, role: ParentRole) => {
     await setDoc(doc(db, 'users', userId), { parentRole: role }, { merge: true });
   };
+
+  const updateRecurringSchedule = async (schedule: Omit<RecurringSchedule, 'parentA' | 'parentB'>) => {
+    if (!userProfile.groupId) throw new Error("L'utilisateur n'est pas dans un groupe.");
+    
+    const groupDocRef = doc(db, 'groups', userProfile.groupId);
+    const scheduleToSave = {
+        ...schedule,
+        parentA: 'Parent 1',
+        parentB: 'Parent 2',
+    };
+    await setDoc(groupDocRef, { recurringSchedule: scheduleToSave }, { merge: true });
+  }
   
   const value = { 
     user, 
     loading, 
     groupId: userProfile.groupId, 
     parentRole: userProfile.parentRole, 
+    recurringSchedule: userProfile.recurringSchedule,
     createGroup, 
     joinGroup, 
-    updateParentRole 
+    updateParentRole,
+    updateRecurringSchedule
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

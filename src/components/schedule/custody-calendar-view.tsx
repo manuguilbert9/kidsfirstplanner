@@ -4,8 +4,8 @@ import { useState, useMemo } from 'react';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { mockEvents } from '@/lib/mock-data';
-import type { CustodyEvent, RecurringSchedule, ParentRole } from '@/lib/types';
-import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, areIntervalsOverlapping, eachDayOfInterval, isWithinInterval, getDay } from 'date-fns';
+import type { CustodyEvent, RecurringSchedule } from '@/lib/types';
+import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, isWithinInterval, eachDayOfInterval } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -52,12 +52,9 @@ const generateRecurringEvents = (schedule: RecurringSchedule | null, visibleRang
     if (!schedule) return [];
 
     const events: CustodyEvent[] = [];
-    // La semaine commence toujours un dimanche pour la cohérence du calcul
-    const weeks = eachWeekOfInterval(visibleRange, { weekStartsOn: 0, locale: fr });
+    const weeks = eachWeekOfInterval(visibleRange, { weekStartsOn: 1, locale: fr });
     const [handoverHour, handoverMinute] = schedule.handoverTime.split(':').map(Number);
-    
-    // De même ici, on se base sur le début de la semaine (dimanche)
-    const scheduleStartWeek = startOfWeek(schedule.startDate, { weekStartsOn: 0, locale: fr });
+    const scheduleStartWeek = startOfWeek(schedule.startDate, { weekStartsOn: 1, locale: fr });
 
     for (const weekStart of weeks) {
         if (weekStart < scheduleStartWeek) continue;
@@ -68,17 +65,14 @@ const generateRecurringEvents = (schedule: RecurringSchedule | null, visibleRang
         const currentParent = isParentAWeek ? schedule.parentA : schedule.parentB;
         const nextParent = isParentAWeek ? schedule.parentB : schedule.parentA;
         
-        // Calcule le jour de passation de cette semaine
-        let handoverDayThisWeek = addDays(weekStart, schedule.alternatingWeekDay);
+        let handoverDayThisWeek = addDays(weekStart, schedule.alternatingWeekDay -1);
 
-        // Si la date de début est après le jour de passation de la première semaine, on commence à la passation suivante
-        if (weekStart.getTime() === scheduleStartWeek.getTime() && schedule.startDate > addDays(weekStart, schedule.alternatingWeekDay)) {
+        if (weekStart.getTime() === scheduleStartWeek.getTime() && schedule.startDate > handoverDayThisWeek) {
              handoverDayThisWeek = addDays(handoverDayThisWeek, 7);
         }
 
         const handoverDateTime = setMinutes(setHours(handoverDayThisWeek, handoverHour), handoverMinute);
         
-        // Ignore les passations qui sont en dehors de la plage visible
         if (!isWithinInterval(handoverDateTime, visibleRange)) continue;
         
         const startOfCustodyWeek = handoverDateTime
@@ -92,7 +86,7 @@ const generateRecurringEvents = (schedule: RecurringSchedule | null, visibleRang
             parent: currentParent,
             location: 'Alternance',
             description: `Semaine avec ${currentParent}. Passation à ${nextParent} à la fin.`,
-            isHandover: false, // This is the whole week, not just the handover
+            isHandover: false,
         };
 
         const handoverEvent: CustodyEvent = {
@@ -121,15 +115,8 @@ const getEventsForDay = (day: Date, allEvents: CustodyEvent[]): CustodyEvent[] =
 export function CustodyCalendarView() {
   const [date, setDate] = useState<Date | undefined>(new Date());
   const isMobile = useIsMobile();
-  const { parentRole } = useAuth();
+  const { parentRole, recurringSchedule } = useAuth();
   const [showRecurring, setShowRecurring] = useState(true);
-  const [recurringSchedule, setRecurringSchedule] = useState<RecurringSchedule | null>({
-      alternatingWeekDay: 3, // Mercredi
-      handoverTime: '18:00',
-      parentA: 'Parent 1',
-      parentB: 'Parent 2',
-      startDate: new Date(),
-  });
 
   const visibleMonths = useMemo(() => {
     const firstDay = startOfMonth(date || new Date());
@@ -151,7 +138,6 @@ export function CustodyCalendarView() {
     const p2Days: Date[] = [];
 
     combinedEvents.forEach(event => {
-      // We only care about custody weeks, not single events for highlighting
       if (event.isHandover) return;
 
       const eventDays = eachDayOfInterval({ start: event.start, end: event.end });
@@ -216,6 +202,7 @@ export function CustodyCalendarView() {
             modifiers={modifiers}
             modifiersClassNames={modifiersClassNames}
             numberOfMonths={isMobile ? 1 : 2}
+            weekStartsOn={1}
           />
         </CardContent>
          <CardContent className="pt-0">
@@ -265,5 +252,3 @@ export function CustodyCalendarView() {
     </div>
   );
 }
-
-    
