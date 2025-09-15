@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
 import { AuthProvider } from '@/hooks/use-auth';
+import { ColorProvider } from '@/hooks/use-colors';
 
 export const metadata: Metadata = {
   title: 'KidsFirst Planner',
@@ -24,9 +25,11 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <ColorProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </ColorProvider>
         <Toaster />
       </body>
     </html>

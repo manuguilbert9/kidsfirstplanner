@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Download, Plus, Share2, LogOut, User as UserIcon } from 'lucide-react';
+import { Download, Plus, Share2, LogOut, User as UserIcon, Palette } from 'lucide-react';
 import { EventSheet } from '@/components/schedule/event-sheet';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -14,16 +14,21 @@ import {
   DropdownMenuTrigger,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuPortal,
+  DropdownMenuSubContent
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/hooks/use-auth';
 import { auth } from '@/lib/firebase';
 import type { ParentRole } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { PARENT_COLORS } from '@/lib/colors';
 
 export function HeaderActions() {
   const [isSheetOpen, setSheetOpen] = useState(false);
   const { toast } = useToast();
-  const { user, parentRole, updateParentRole } = useAuth();
+  const { user, parentRole, updateParentRole, updateParentColor, parentColor } = useAuth();
 
   const handleExport = () => {
     toast({
@@ -60,6 +65,25 @@ export function HeaderActions() {
           variant: 'destructive',
           title: 'Erreur',
           description: 'Impossible de mettre à jour votre rôle.',
+        });
+      }
+    }
+  }
+
+  const handleColorChange = async (color: string) => {
+     if (user && parentRole) {
+      try {
+        await updateParentColor(user.uid, color);
+        toast({
+          title: 'Couleur mise à jour',
+          description: 'Votre couleur a été modifiée.',
+        });
+      } catch (error) {
+        console.error("Erreur lors de la mise à jour de la couleur", error);
+        toast({
+          variant: 'destructive',
+          title: 'Erreur',
+          description: 'Impossible de mettre à jour votre couleur.',
         });
       }
     }
@@ -109,6 +133,25 @@ export function HeaderActions() {
                    <DropdownMenuRadioItem value="Parent 1">Parent 1</DropdownMenuRadioItem>
                    <DropdownMenuRadioItem value="Parent 2">Parent 2</DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Palette className="mr-2 h-4 w-4" />
+                    <span>Ma couleur</span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuPortal>
+                    <DropdownMenuSubContent>
+                      <DropdownMenuRadioGroup value={parentColor} onValueChange={handleColorChange}>
+                        {PARENT_COLORS.map(color => (
+                           <DropdownMenuRadioItem key={color.value} value={color.value} className="gap-2">
+                            <div className="w-4 h-4 rounded-full" style={{ backgroundColor: color.value }}></div>
+                            <span>{color.name}</span>
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuPortal>
+                </DropdownMenuSub>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
                     <LogOut className="mr-2 h-4 w-4" />

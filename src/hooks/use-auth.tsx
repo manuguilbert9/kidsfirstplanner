@@ -6,28 +6,32 @@ import {
   useState,
   useEffect,
   ReactNode,
+  useCallback,
 } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, onSnapshot, Timestamp } from 'firebase/firestore';
-import type { ParentRole, RecurringSchedule } from '@/lib/types';
+import { doc, getDoc, setDoc, onSnapshot, Timestamp, collection, getDocs } from 'firebase/firestore';
+import type { ParentRole, RecurringSchedule, UserProfileData } from '@/lib/types';
+import { useColors } from './use-colors';
 
 interface UserProfile {
   groupId: string | null;
   parentRole: ParentRole | null;
+  parentColor: string | null;
   recurringSchedule: RecurringSchedule | null;
 }
 interface AuthContextType {
   user: User | null;
-
   loading: boolean;
   groupId: string | null;
   parentRole: ParentRole | null;
+  parentColor: string | null;
   recurringSchedule: RecurringSchedule | null;
   createGroup: (userId: string, groupName: string) => Promise<string>;
   joinGroup: (userId: string, groupId: string) => Promise<boolean>;
   updateParentRole: (userId: string, role: ParentRole) => Promise<void>;
   updateRecurringSchedule: (schedule: RecurringSchedule) => Promise<void>;
+  updateParentColor: (userId: string, color: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,19 +39,40 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [userProfile, setUserProfile] = useState<UserProfile>({ groupId: null, parentRole: null, recurringSchedule: null });
+  const [userProfile, setUserProfile] = useState<UserProfile>({ 
+    groupId: null, 
+    parentRole: null, 
+    recurringSchedule: null,
+    parentColor: null,
+  });
+
+  const { setParent1Color, setParent2Color } = useColors();
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (!user) {
-        setUserProfile({ groupId: null, parentRole: null, recurringSchedule: null });
+        setUserProfile({ groupId: null, parentRole: null, recurringSchedule: null, parentColor: null });
         setLoading(false);
       }
     });
 
     return () => unsubscribeAuth();
   }, []);
+
+  const fetchAndUpdateColors = useCallback(async (groupId: string) => {
+    const usersQuerySnapshot = await getDocs(collection(db, 'users'));
+    usersQuerySnapshot.forEach(doc => {
+      const userData = doc.data() as UserProfileData;
+      if (userData.groupId === groupId) {
+        if (userData.parentRole === 'Parent 1') {
+          setParent1Color(userData.color || null);
+        } else if (userData.parentRole === 'Parent 2') {
+          setParent2Color(userData.color || null);
+        }
+      }
+    });
+  }, [setParent1Color, setParent2Color]);
 
   useEffect(() => {
     if (!user) {
@@ -59,16 +84,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const userDocRef = doc(db, 'users', user.uid);
     
     const unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
-      const userData = docSnap.data();
+      const userData = docSnap.data() as UserProfileData;
       const currentGroupId = userData?.groupId || null;
       
       setUserProfile(prev => ({
         ...prev,
         groupId: currentGroupId,
         parentRole: userData?.parentRole || null,
+        parentColor: userData?.color || null
       }));
 
       if (currentGroupId) {
+         fetchAndUpdateColors(currentGroupId);
          const groupDocRef = doc(db, 'groups', currentGroupId);
          const unsubscribeGroup = onSnapshot(groupDocRef, (groupDoc) => {
             const groupData = groupDoc.data();
@@ -98,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribeUser();
-  }, [user]);
+  }, [user, fetchAndUpdateColors]);
 
   const createGroup = async (userId: string, groupName: string) => {
     const groupId = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -126,6 +153,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateParentRole = async (userId: string, role: ParentRole) => {
     await setDoc(doc(db, 'users', userId), { parentRole: role }, { merge: true });
   };
+  
+  const updateParentColor = async (userId: string, color: string) => {
+    await setDoc(doc(db, 'users', userId), { color: color }, { merge: true });
+  }
 
   const updateRecurringSchedule = async (schedule: RecurringSchedule) => {
     if (!userProfile.groupId) throw new Error("L'utilisateur n'est pas dans un groupe.");
@@ -139,11 +170,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading, 
     groupId: userProfile.groupId, 
     parentRole: userProfile.parentRole, 
+    parentColor: userProfile.parentColor,
     recurringSchedule: userProfile.recurringSchedule,
     createGroup, 
     joinGroup, 
     updateParentRole,
-    updateRecurringSchedule
+    updateRecurringSchedule,
+    updateParentColor
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

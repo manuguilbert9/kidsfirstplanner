@@ -12,9 +12,15 @@ export type CustodyEvent = {
 };
 
 export type RecurringSchedule = {
-  alternatingWeekDay: number; // 0 for Sunday, 1 for Monday, etc.
+  alternatingWeekDay: number; // 1 for Monday, etc.
   handoverTime: string; // "HH:mm"
   parentA: ParentRole;
   parentB: ParentRole;
   startDate: Date;
 };
+
+export interface UserProfileData {
+  groupId: string;
+  parentRole: ParentRole;
+  color?: string;
+}
