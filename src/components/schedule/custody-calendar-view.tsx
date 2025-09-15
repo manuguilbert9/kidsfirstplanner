@@ -5,7 +5,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { mockEvents } from '@/lib/mock-data';
 import type { CustodyEvent, RecurringSchedule, CustodyOverride, ParentRole } from '@/lib/types';
-import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, endOfMonth, isWithinInterval, eachDayOfInterval, differenceInWeeks, getDay, addWeeks, subWeeks, endOfWeek, addMonths, startOfMonth, isAfter, isBefore, isEqual, differenceInCalendarWeeks } from 'date-fns';
+import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, endOfMonth, isWithinInterval, eachDayOfInterval, getDay, addWeeks, subWeeks, endOfWeek, addMonths, startOfMonth, isAfter, isBefore, isEqual, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -53,7 +53,8 @@ function EventCard({ event, getFirstName }: { event: CustodyEvent; getFirstName:
 const generateRecurringEvents = (
     schedule: RecurringSchedule | null,
     overrides: CustodyOverride[],
-    visibleRange: { start: Date, end: Date }
+    visibleRange: { start: Date, end: Date },
+    getFirstName: (role: ParentRole) => string,
 ): CustodyEvent[] => {
     
     const events: CustodyEvent[] = [];
@@ -61,7 +62,8 @@ const generateRecurringEvents = (
     
     const weekStartsOn = 1; // Lundi
     const daysToCover = eachDayOfInterval(visibleRange);
-    const scheduleStartDate = new Date(schedule.startDate);
+    const scheduleStartDate = startOfWeek(new Date(schedule.startDate), { weekStartsOn, locale: fr });
+
 
     daysToCover.forEach(day => {
         let currentParent: ParentRole | undefined;
@@ -76,9 +78,10 @@ const generateRecurringEvents = (
             currentParent = activeOverride.parent;
         } else {
             // 2. Fallback to recurring schedule
-            const weekDiff = differenceInCalendarWeeks(day, scheduleStartDate, { weekStartsOn, locale: fr });
-            
-            if (weekDiff % 2 === 0) {
+             const dayDiff = differenceInDays(day, scheduleStartDate);
+             const weekNumber = Math.floor(dayDiff / 7);
+
+            if (weekNumber % 2 === 0) {
                 currentParent = schedule.parentA;
             } else {
                 currentParent = schedule.parentB;
@@ -88,7 +91,7 @@ const generateRecurringEvents = (
         if (currentParent) {
             events.push({
                 id: `bg-${format(day, 'yyyy-MM-dd')}`,
-                title: `Garde ${currentParent}`,
+                title: `Garde ${getFirstName(currentParent)}`,
                 start: day,
                 end: addDays(day, 1),
                 parent: currentParent,
@@ -102,11 +105,12 @@ const generateRecurringEvents = (
     // 3. Generate handover events
     const [handoverHour, handoverMinute] = schedule.handoverTime.split(':').map(Number);
     
-    let firstHandoverInSchedule = addDays(startOfWeek(scheduleStartDate, { weekStartsOn }), schedule.alternatingWeekDay - 1);
-    if(isBefore(firstHandoverInSchedule, scheduleStartDate)) {
+    let firstHandoverInSchedule = addDays(startOfWeek(new Date(schedule.startDate), { weekStartsOn }), schedule.alternatingWeekDay - 1);
+    if(isBefore(firstHandoverInSchedule, new Date(schedule.startDate))) {
         firstHandoverInSchedule = addWeeks(firstHandoverInSchedule, 1);
     }
-
+    
+    // Find the first handover relevant to the visible range
     let currentHandover = firstHandoverInSchedule;
     while(isBefore(currentHandover, visibleRange.start)) {
         currentHandover = addWeeks(currentHandover, 2); // alternating weeks
@@ -125,10 +129,11 @@ const generateRecurringEvents = (
         );
 
         if (isWithinInterval(handoverDateTime, visibleRange) && !isInOverride) {
-            const weekDiff = differenceInCalendarWeeks(handoverDateTime, scheduleStartDate, { weekStartsOn, locale: fr });
+            const dayDiff = differenceInDays(handoverDateTime, scheduleStartDate);
+            const weekNumber = Math.floor(dayDiff / 7);
 
-            const fromParent = weekDiff % 2 === 0 ? schedule.parentA : schedule.parentB;
-            const toParent = weekDiff % 2 === 0 ? schedule.parentB : schedule.parentA;
+            const fromParent = weekNumber % 2 === 0 ? schedule.parentA : schedule.parentB;
+            const toParent = weekNumber % 2 === 0 ? schedule.parentB : schedule.parentA;
 
             events.push({
                 id: `handover-${format(handoverDateTime, 'yyyy-MM-dd')}`,
@@ -144,14 +149,6 @@ const generateRecurringEvents = (
         currentHandover = addWeeks(currentHandover, 2);
     }
     
-    // Fallback for names in description
-    function getFirstName(role: ParentRole): string {
-        if(role === schedule?.parentA) return 'Parent 1';
-        if(role === schedule?.parentB) return 'Parent 2';
-        return role;
-    }
-
-
     return events;
 };
 
@@ -188,7 +185,7 @@ export function CustodyCalendarView() {
   const { allEvents, parent1Days, parent2Days, overrideDays } = useMemo(() => {
     const oneTimeEvents = mockEvents;
     
-    const recurring = showRecurring ? generateRecurringEvents(recurringSchedule, custodyOverrides, visibleRange) : [];
+    const recurring = showRecurring ? generateRecurringEvents(recurringSchedule, custodyOverrides, visibleRange, getFirstName) : [];
 
     const combinedEvents = [...oneTimeEvents, ...recurring];
 
@@ -213,7 +210,7 @@ export function CustodyCalendarView() {
 
     return { allEvents: combinedEvents, parent1Days: p1Days, parent2Days: p2Days, overrideDays: overrides };
 
-  }, [recurringSchedule, showRecurring, visibleRange, custodyOverrides]);
+  }, [recurringSchedule, showRecurring, visibleRange, custodyOverrides, getFirstName]);
 
   const eventsForSelectedDay = useMemo(() => {
     return date ? getEventsForDay(date, allEvents) : [];
@@ -359,5 +356,3 @@ export function CustodyCalendarView() {
     </>
   );
 }
-
-    
