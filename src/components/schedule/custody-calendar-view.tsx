@@ -5,7 +5,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { mockEvents } from '@/lib/mock-data';
 import type { CustodyEvent, RecurringSchedule } from '@/lib/types';
-import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, isWithinInterval, eachDayOfInterval, differenceInWeeks, getDay, addWeeks, subWeeks, subDays, endOfWeek } from 'date-fns';
+import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, isWithinInterval, eachDayOfInterval, differenceInWeeks, getDay, addWeeks, subWeeks, subDays, endOfWeek, addMonths } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -109,20 +109,22 @@ const generateRecurringEvents = (schedule: RecurringSchedule | null, visibleRang
     while (currentHandover <= visibleRange.end) {
         const handoverDateTime = setMinutes(setHours(currentHandover, handoverHour), handoverMinute);
         
-        const weekDiff = differenceInWeeks(handoverDateTime, scheduleStartDate, { weekStartsOn, locale: fr });
-        const fromParent = weekDiff % 2 === 0 ? schedule.parentA : schedule.parentB;
-        const toParent = weekDiff % 2 === 0 ? schedule.parentB : schedule.parentA;
+        if (isWithinInterval(handoverDateTime, visibleRange)) {
+            const weekDiff = differenceInWeeks(handoverDateTime, scheduleStartDate, { weekStartsOn, locale: fr });
+            const fromParent = weekDiff % 2 === 0 ? schedule.parentA : schedule.parentB;
+            const toParent = weekDiff % 2 === 0 ? schedule.parentB : schedule.parentA;
 
-        events.push({
-            id: `handover-${format(handoverDateTime, 'yyyy-MM-dd')}`,
-            title: 'Passation',
-            start: handoverDateTime,
-            end: setMinutes(setHours(handoverDateTime, handoverHour + 1), handoverMinute),
-            parent: toParent, // Le parent qui reçoit l'enfant
-            location: 'Lieu de passation',
-            description: `Passation de ${fromParent} à ${toParent}`,
-            isHandover: true,
-        });
+            events.push({
+                id: `handover-${format(handoverDateTime, 'yyyy-MM-dd')}`,
+                title: 'Passation',
+                start: handoverDateTime,
+                end: setMinutes(setHours(handoverDateTime, handoverHour + 1), handoverMinute),
+                parent: toParent, // Le parent qui reçoit l'enfant
+                location: 'Lieu de passation',
+                description: `Passation de ${fromParent} à ${toParent}`,
+                isHandover: true,
+            });
+        }
         
         currentHandover = addWeeks(currentHandover, 1);
     }
@@ -140,20 +142,25 @@ const getEventsForDay = (day: Date, allEvents: CustodyEvent[]): CustodyEvent[] =
 
 export function CustodyCalendarView() {
   const [date, setDate] = useState<Date | undefined>(new Date());
+  const [currentMonth, setCurrentMonth] = useState(startOfMonth(new Date()));
   const isMobile = useIsMobile();
   const { parentRole, recurringSchedule } = useAuth();
   const [showRecurring, setShowRecurring] = useState(true);
 
   const visibleMonths = useMemo(() => {
-    const firstDay = startOfMonth(date || new Date());
-    return [firstDay];
-  },[date]);
+    const firstDay = startOfMonth(date || currentMonth);
+    const months = [firstDay];
+    if (!isMobile) {
+      months.push(addMonths(firstDay, 1));
+    }
+    return months;
+  }, [date, currentMonth, isMobile]);
 
   const { allEvents, parent1Days, parent2Days } = useMemo(() => {
     const oneTimeEvents = mockEvents;
     const visibleRange = {
-      start: startOfWeek(startOfMonth(visibleMonths[0]), { weekStartsOn: 1, locale: fr }),
-      end: endOfWeek(endOfMonth(visibleMonths[isMobile ? 0 : 1] ?? visibleMonths[0]), { weekStartsOn: 1, locale: fr })
+      start: startOfWeek(visibleMonths[0], { weekStartsOn: 1, locale: fr }),
+      end: endOfWeek(endOfMonth(visibleMonths[visibleMonths.length - 1]), { weekStartsOn: 1, locale: fr })
     };
     
     const recurring = showRecurring ? generateRecurringEvents(recurringSchedule, visibleRange) : [];
@@ -174,7 +181,7 @@ export function CustodyCalendarView() {
 
     return { allEvents: combinedEvents, parent1Days: p1Days, parent2Days: p2Days };
 
-  }, [recurringSchedule, showRecurring, visibleMonths, isMobile]);
+  }, [recurringSchedule, showRecurring, visibleMonths]);
 
   const eventsForSelectedDay = useMemo(() => {
     return date ? getEventsForDay(date, allEvents) : [];
@@ -195,6 +202,11 @@ export function CustodyCalendarView() {
     parent1: 'day-parent1',
     parent2: 'day-parent2',
   };
+  
+  const handleMonthChange = (month: Date) => {
+    setCurrentMonth(startOfMonth(month));
+  };
+
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -226,6 +238,8 @@ export function CustodyCalendarView() {
             modifiers={modifiers}
             modifiersClassNames={modifiersClassNames}
             numberOfMonths={isMobile ? 1 : 2}
+            month={currentMonth}
+            onMonthChange={handleMonthChange}
             weekStartsOn={1}
           />
         </CardContent>
@@ -276,3 +290,5 @@ export function CustodyCalendarView() {
     </div>
   );
 }
+
+    
