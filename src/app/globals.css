@@ -24,8 +24,8 @@
     --input: 0 0% 30%;
     --ring: 33 100% 50%;
     --radius: 0.5rem;
-    --parent1: 220 70% 50%;
-    --parent2: 160 60% 45%;
+    --parent1: 220 70% 50%; /* Default Parent 1 Color */
+    --parent2: 160 60% 45%; /* Default Parent 2 Color */
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 240 5.9% 10%;
@@ -61,8 +61,8 @@
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-    --parent1: 220 70% 50%;
-    --parent2: 160 60% 45%;
+    --parent1: 220 70% 50%; /* Default Parent 1 Color */
+    --parent2: 160 60% 45%; /* Default Parent 2 Color */
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;

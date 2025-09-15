@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, onSnapshot, Timestamp, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, Timestamp, collection, getDocs, query, where } from 'firebase/firestore';
 import type { ParentRole, RecurringSchedule, UserProfileData } from '@/lib/types';
 import { useColors } from './use-colors';
 
@@ -60,20 +60,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribeAuth();
   }, []);
 
-  const fetchAndUpdateColors = useCallback(async (groupId: string) => {
-    const usersQuerySnapshot = await getDocs(collection(db, 'users'));
-    usersQuerySnapshot.forEach(doc => {
-      const userData = doc.data() as UserProfileData;
-      if (userData.groupId === groupId) {
-        if (userData.parentRole === 'Parent 1') {
-          setParent1Color(userData.color || null);
-        } else if (userData.parentRole === 'Parent 2') {
-          setParent2Color(userData.color || null);
-        }
-      }
-    });
-  }, [setParent1Color, setParent2Color]);
-
   useEffect(() => {
     if (!user) {
       setLoading(false);
@@ -95,7 +81,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }));
 
       if (currentGroupId) {
-         fetchAndUpdateColors(currentGroupId);
+         const groupUsersQuery = query(collection(db, 'users'), where('groupId', '==', currentGroupId));
+         const unsubscribeGroupUsers = onSnapshot(groupUsersQuery, (querySnapshot) => {
+            querySnapshot.forEach((doc) => {
+                const memberData = doc.data() as UserProfileData;
+                 if (memberData.parentRole === 'Parent 1') {
+                    setParent1Color(memberData.color || null);
+                } else if (memberData.parentRole === 'Parent 2') {
+                    setParent2Color(memberData.color || null);
+                }
+            });
+         });
+
          const groupDocRef = doc(db, 'groups', currentGroupId);
          const unsubscribeGroup = onSnapshot(groupDocRef, (groupDoc) => {
             const groupData = groupDoc.data();
@@ -113,7 +110,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
              console.error("Erreur d'écoute du groupe:", error);
              setLoading(false);
          });
-         return () => unsubscribeGroup();
+
+         return () => {
+            unsubscribeGroupUsers();
+            unsubscribeGroup();
+         }
       } else {
         setUserProfile(prev => ({...prev, recurringSchedule: null}));
         setLoading(false);
@@ -125,13 +126,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribeUser();
-  }, [user, fetchAndUpdateColors]);
+  }, [user, setParent1Color, setParent2Color]);
 
   const createGroup = async (userId: string, groupName: string) => {
     const groupId = Math.random().toString(36).substring(2, 8).toUpperCase();
     await setDoc(doc(db, 'groups', groupId), { name: groupName, members: [userId] });
-    // Le créateur devient Parent 1 par défaut
-    await setDoc(doc(db, 'users', userId), { groupId, parentRole: 'Parent 1' }, { merge: true });
+    // Le créateur devient Parent 1 par défaut et se voit attribuer la première couleur par défaut
+    const defaultColor = 'hsl(220 70% 50%)';
+    await setDoc(doc(db, 'users', userId), { groupId, parentRole: 'Parent 1', color: defaultColor }, { merge: true });
     return groupId;
   };
 
@@ -143,8 +145,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!members.includes(userId)) {
         await setDoc(groupDocRef, { members: [...members, userId] }, { merge: true });
       }
-      // Le deuxième membre devient Parent 2 par défaut
-      await setDoc(doc(db, 'users', userId), { groupId: groupIdToJoin, parentRole: 'Parent 2' }, { merge: true });
+      // Le deuxième membre devient Parent 2 par défaut et se voit attribuer la deuxième couleur par défaut
+      const defaultColor = 'hsl(160 60% 45%)';
+      await setDoc(doc(db, 'users', userId), { groupId: groupIdToJoin, parentRole: 'Parent 2', color: defaultColor }, { merge: true });
       return true;
     }
     return false;
