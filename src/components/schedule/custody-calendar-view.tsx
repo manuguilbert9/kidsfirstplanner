@@ -259,5 +259,3 @@ export function CustodyCalendarView() {
     </div>
   );
 }
-
-    
