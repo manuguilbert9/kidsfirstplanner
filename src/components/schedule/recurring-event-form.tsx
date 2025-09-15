@@ -56,7 +56,7 @@ export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
   const form = useForm<RecurringFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      alternatingWeekDay: 5, // Friday
+      alternatingWeekDay: 3, // Mercredi
       handoverTime: '18:00',
       startDate: format(new Date(), 'yyyy-MM-dd'),
     },
@@ -147,3 +147,5 @@ export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
     </Form>
   );
 }
+
+    

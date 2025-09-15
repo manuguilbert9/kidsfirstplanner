@@ -5,7 +5,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { mockEvents } from '@/lib/mock-data';
 import type { CustodyEvent, RecurringSchedule, ParentRole } from '@/lib/types';
-import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, areIntervalsOverlapping, eachDayOfInterval, isWithinInterval } from 'date-fns';
+import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, areIntervalsOverlapping, eachDayOfInterval, isWithinInterval, getDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -52,10 +52,12 @@ const generateRecurringEvents = (schedule: RecurringSchedule | null, visibleRang
     if (!schedule) return [];
 
     const events: CustodyEvent[] = [];
-    const weeks = eachWeekOfInterval(visibleRange, { weekStartsOn: schedule.alternatingWeekDay as any, locale: fr });
+    // La semaine commence toujours un dimanche pour la cohérence du calcul
+    const weeks = eachWeekOfInterval(visibleRange, { weekStartsOn: 0, locale: fr });
     const [handoverHour, handoverMinute] = schedule.handoverTime.split(':').map(Number);
     
-    const scheduleStartWeek = startOfWeek(schedule.startDate, { weekStartsOn: schedule.alternatingWeekDay as any, locale: fr });
+    // De même ici, on se base sur le début de la semaine (dimanche)
+    const scheduleStartWeek = startOfWeek(schedule.startDate, { weekStartsOn: 0, locale: fr });
 
     for (const weekStart of weeks) {
         if (weekStart < scheduleStartWeek) continue;
@@ -66,7 +68,19 @@ const generateRecurringEvents = (schedule: RecurringSchedule | null, visibleRang
         const currentParent = isParentAWeek ? schedule.parentA : schedule.parentB;
         const nextParent = isParentAWeek ? schedule.parentB : schedule.parentA;
         
-        const handoverDateTime = setMinutes(setHours(addDays(weekStart, schedule.alternatingWeekDay), handoverHour), handoverMinute);
+        // Calcule le jour de passation de cette semaine
+        let handoverDayThisWeek = addDays(weekStart, schedule.alternatingWeekDay);
+
+        // Si la date de début est après le jour de passation de la première semaine, on commence à la passation suivante
+        if (weekStart.getTime() === scheduleStartWeek.getTime() && schedule.startDate > addDays(weekStart, schedule.alternatingWeekDay)) {
+             handoverDayThisWeek = addDays(handoverDayThisWeek, 7);
+        }
+
+        const handoverDateTime = setMinutes(setHours(handoverDayThisWeek, handoverHour), handoverMinute);
+        
+        // Ignore les passations qui sont en dehors de la plage visible
+        if (!isWithinInterval(handoverDateTime, visibleRange)) continue;
+        
         const startOfCustodyWeek = handoverDateTime
         const endOfCustodyWeek = addDays(handoverDateTime, 7);
 
@@ -110,7 +124,7 @@ export function CustodyCalendarView() {
   const { parentRole } = useAuth();
   const [showRecurring, setShowRecurring] = useState(true);
   const [recurringSchedule, setRecurringSchedule] = useState<RecurringSchedule | null>({
-      alternatingWeekDay: 5, // Friday
+      alternatingWeekDay: 3, // Mercredi
       handoverTime: '18:00',
       parentA: 'Parent 1',
       parentB: 'Parent 2',
@@ -251,3 +265,5 @@ export function CustodyCalendarView() {
     </div>
   );
 }
+
+    
