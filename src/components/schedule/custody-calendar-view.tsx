@@ -5,7 +5,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { mockEvents } from '@/lib/mock-data';
 import type { CustodyEvent, RecurringSchedule } from '@/lib/types';
-import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, isWithinInterval, eachDayOfInterval } from 'date-fns';
+import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, isWithinInterval, eachDayOfInterval, differenceInWeeks, getDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -54,28 +54,35 @@ const generateRecurringEvents = (schedule: RecurringSchedule | null, visibleRang
     const events: CustodyEvent[] = [];
     const weeks = eachWeekOfInterval(visibleRange, { weekStartsOn: 1, locale: fr });
     const [handoverHour, handoverMinute] = schedule.handoverTime.split(':').map(Number);
-    const scheduleStartWeek = startOfWeek(schedule.startDate, { weekStartsOn: 1, locale: fr });
+    const scheduleStartDate = new Date(schedule.startDate);
 
     for (const weekStart of weeks) {
-        if (weekStart < scheduleStartWeek) continue;
+        // Find the specific handover day in the current week.
+        // getDay returns 0 for Sunday, we want Monday to be 1.
+        const dayOfWeek = getDay(weekStart) === 0 ? 7 : getDay(weekStart);
+        const daysToAdd = schedule.alternatingWeekDay - dayOfWeek;
+        let handoverDayThisWeek = addDays(weekStart, daysToAdd);
 
-        const weekNumber = Math.floor((weekStart.getTime() - scheduleStartWeek.getTime()) / (1000 * 60 * 60 * 24 * 7));
+        // If the calculated handover is before the schedule start, move to the next week
+        if (handoverDayThisWeek < scheduleStartDate) {
+            handoverDayThisWeek = addDays(handoverDayThisWeek, 7);
+        }
+
+        if (handoverDayThisWeek > visibleRange.end) continue;
+        
+        const handoverDateTime = setMinutes(setHours(handoverDayThisWeek, handoverHour), handoverMinute);
+
+        // Determine who has custody this week based on the week number since the start date
+        const weekNumber = differenceInWeeks(handoverDateTime, scheduleStartDate, { weekStartsOn: 1, locale: fr });
+
         const isParentAWeek = weekNumber % 2 === 0;
 
         const currentParent = isParentAWeek ? schedule.parentA : schedule.parentB;
         const nextParent = isParentAWeek ? schedule.parentB : schedule.parentA;
         
-        let handoverDayThisWeek = addDays(weekStart, schedule.alternatingWeekDay -1);
-
-        if (weekStart.getTime() === scheduleStartWeek.getTime() && schedule.startDate > handoverDayThisWeek) {
-             handoverDayThisWeek = addDays(handoverDayThisWeek, 7);
-        }
-
-        const handoverDateTime = setMinutes(setHours(handoverDayThisWeek, handoverHour), handoverMinute);
-        
         if (!isWithinInterval(handoverDateTime, visibleRange)) continue;
         
-        const startOfCustodyWeek = handoverDateTime
+        const startOfCustodyWeek = handoverDateTime;
         const endOfCustodyWeek = addDays(handoverDateTime, 7);
 
         const event: CustodyEvent = {
@@ -252,3 +259,5 @@ export function CustodyCalendarView() {
     </div>
   );
 }
+
+    
