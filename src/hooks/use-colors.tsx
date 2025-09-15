@@ -1,6 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, ReactNode, useMemo, useEffect } from 'react';
+import { hslToHslString } from '@/lib/utils';
 
 interface ColorContextType {
   parent1Color: string | null;
@@ -11,14 +12,21 @@ interface ColorContextType {
 
 const ColorContext = createContext<ColorContextType | undefined>(undefined);
 
+const extractHslValues = (hslString: string | null): string | null => {
+    if (!hslString) return null;
+    const match = hslString.match(/hsl\(([^)]+)\)/);
+    return match ? match[1] : hslString;
+}
+
 export const ColorProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [parent1Color, setParent1Color] = useState<string | null>(null);
   const [parent2Color, setParent2Color] = useState<string | null>(null);
 
   useEffect(() => {
     const root = document.documentElement;
-    if (parent1Color) {
-      root.style.setProperty('--parent1', parent1Color);
+    const p1ColorValues = extractHslValues(parent1Color);
+    if (p1ColorValues) {
+      root.style.setProperty('--parent1', p1ColorValues);
     } else {
       root.style.removeProperty('--parent1');
     }
@@ -26,8 +34,9 @@ export const ColorProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   useEffect(() => {
     const root = document.documentElement;
-    if (parent2Color) {
-      root.style.setProperty('--parent2', parent2Color);
+    const p2ColorValues = extractHslValues(parent2Color);
+    if (p2ColorValues) {
+      root.style.setProperty('--parent2', p2ColorValues);
     } else {
        root.style.removeProperty('--parent2');
     }
