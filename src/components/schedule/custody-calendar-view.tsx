@@ -5,7 +5,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { mockEvents } from '@/lib/mock-data';
 import type { CustodyEvent, RecurringSchedule } from '@/lib/types';
-import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, isWithinInterval, eachDayOfInterval, differenceInWeeks, getDay } from 'date-fns';
+import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, isWithinInterval, eachDayOfInterval, differenceInWeeks, getDay, addWeeks, subWeeks, subDays, endOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -52,69 +52,88 @@ const generateRecurringEvents = (schedule: RecurringSchedule | null, visibleRang
     if (!schedule) return [];
 
     const events: CustodyEvent[] = [];
-    const weeks = eachWeekOfInterval(visibleRange, { weekStartsOn: 1, locale: fr });
-    const [handoverHour, handoverMinute] = schedule.handoverTime.split(':').map(Number);
     const scheduleStartDate = new Date(schedule.startDate);
+    const weekStartsOn = 1; // Lundi
 
-    for (const weekStart of weeks) {
-        // Find the specific handover day in the current week.
-        // getDay returns 0 for Sunday, we want Monday to be 1.
-        const dayOfWeek = getDay(weekStart) === 0 ? 7 : getDay(weekStart);
-        const daysToAdd = schedule.alternatingWeekDay - dayOfWeek;
-        let handoverDayThisWeek = addDays(weekStart, daysToAdd);
+    // Déterminer le parent qui a la garde au début du planning
+    const firstWeekParent = schedule.parentA;
+    const secondWeekParent = schedule.parentB;
 
-        // If the calculated handover is before the schedule start, move to the next week
-        if (handoverDayThisWeek < scheduleStartDate) {
-            handoverDayThisWeek = addDays(handoverDayThisWeek, 7);
+    const daysToCover = eachDayOfInterval(visibleRange);
+
+    daysToCover.forEach(day => {
+        // Calcule la différence en semaines entre le jour actuel et le début du planning
+        const weekDiff = differenceInWeeks(day, scheduleStartDate, { weekStartsOn, locale: fr });
+        
+        let currentParent;
+        // La semaine est paire ou impaire ?
+        if (weekDiff % 2 === 0) {
+            currentParent = firstWeekParent; // Semaine du Parent A
+        } else {
+            currentParent = secondWeekParent; // Semaine du Parent B
         }
 
-        if (handoverDayThisWeek > visibleRange.end) continue;
-        
-        const handoverDateTime = setMinutes(setHours(handoverDayThisWeek, handoverHour), handoverMinute);
-
-        // Determine who has custody this week based on the week number since the start date
-        const weekNumber = differenceInWeeks(handoverDateTime, scheduleStartDate, { weekStartsOn: 1, locale: fr });
-
-        const isParentAWeek = weekNumber % 2 === 0;
-
-        const currentParent = isParentAWeek ? schedule.parentA : schedule.parentB;
-        const nextParent = isParentAWeek ? schedule.parentB : schedule.parentA;
-        
-        if (!isWithinInterval(handoverDateTime, visibleRange)) continue;
-        
-        const startOfCustodyWeek = handoverDateTime;
-        const endOfCustodyWeek = addDays(handoverDateTime, 7);
-
-        const event: CustodyEvent = {
-            id: `recurring-${weekStart.toISOString()}`,
-            title: `Garde de ${currentParent}`,
-            start: startOfCustodyWeek,
-            end: endOfCustodyWeek,
+        // Crée un "événement" de fond pour la journée entière
+        events.push({
+            id: `bg-${format(day, 'yyyy-MM-dd')}`,
+            title: `Garde ${currentParent}`,
+            start: day,
+            end: addDays(day, 1), // L'événement dure toute la journée
             parent: currentParent,
-            location: 'Alternance',
-            description: `Semaine avec ${currentParent}. Passation à ${nextParent} à la fin.`,
+            location: '',
+            description: '',
             isHandover: false,
-        };
+        });
+    });
 
-        const handoverEvent: CustodyEvent = {
-            id: `handover-${weekStart.toISOString()}`,
+    // Générer les événements de passation visibles
+    const [handoverHour, handoverMinute] = schedule.handoverTime.split(':').map(Number);
+    
+    // Trouver le premier jour de passation
+    let currentHandover = startOfWeek(scheduleStartDate, { weekStartsOn });
+    currentHandover = addDays(currentHandover, schedule.alternatingWeekDay - 1);
+    if (currentHandover < scheduleStartDate) {
+      currentHandover = addWeeks(currentHandover, 1);
+    }
+    
+    // Reculer pour trouver la première passation potentiellement visible
+    while (currentHandover > visibleRange.start) {
+        currentHandover = subWeeks(currentHandover, 1);
+    }
+     // Avancer pour trouver la première passation dans la vue
+    while (currentHandover < visibleRange.start) {
+        currentHandover = addWeeks(currentHandover, 1);
+    }
+
+
+    while (currentHandover <= visibleRange.end) {
+        const handoverDateTime = setMinutes(setHours(currentHandover, handoverHour), handoverMinute);
+        
+        const weekDiff = differenceInWeeks(handoverDateTime, scheduleStartDate, { weekStartsOn, locale: fr });
+        const fromParent = weekDiff % 2 === 0 ? schedule.parentA : schedule.parentB;
+        const toParent = weekDiff % 2 === 0 ? schedule.parentB : schedule.parentA;
+
+        events.push({
+            id: `handover-${format(handoverDateTime, 'yyyy-MM-dd')}`,
             title: 'Passation',
             start: handoverDateTime,
             end: setMinutes(setHours(handoverDateTime, handoverHour + 1), handoverMinute),
-            parent: nextParent,
+            parent: toParent, // Le parent qui reçoit l'enfant
             location: 'Lieu de passation',
-            description: `Passation de ${currentParent} à ${nextParent}`,
+            description: `Passation de ${fromParent} à ${toParent}`,
             isHandover: true,
-        };
+        });
         
-        events.push(event, handoverEvent);
+        currentHandover = addWeeks(currentHandover, 1);
     }
+
+
     return events;
 };
 
 const getEventsForDay = (day: Date, allEvents: CustodyEvent[]): CustodyEvent[] => {
     return allEvents
-      .filter(event => isWithinInterval(day, { start: event.start, end: event.end }) && !isSameDay(day, event.end))
+      .filter(event => (isSameDay(day, event.start) && event.isHandover))
       .sort((a,b) => a.start.getTime() - b.start.getTime());
 };
 
@@ -133,8 +152,8 @@ export function CustodyCalendarView() {
   const { allEvents, parent1Days, parent2Days } = useMemo(() => {
     const oneTimeEvents = mockEvents;
     const visibleRange = {
-      start: startOfMonth(visibleMonths[0]),
-      end: endOfMonth(visibleMonths[isMobile ? 0 : 1] ?? visibleMonths[0])
+      start: startOfWeek(startOfMonth(visibleMonths[0]), { weekStartsOn: 1, locale: fr }),
+      end: endOfWeek(endOfMonth(visibleMonths[isMobile ? 0 : 1] ?? visibleMonths[0]), { weekStartsOn: 1, locale: fr })
     };
     
     const recurring = showRecurring ? generateRecurringEvents(recurringSchedule, visibleRange) : [];
@@ -146,12 +165,10 @@ export function CustodyCalendarView() {
 
     combinedEvents.forEach(event => {
       if (event.isHandover) return;
-
-      const eventDays = eachDayOfInterval({ start: event.start, end: event.end });
       if (event.parent === 'Parent 1') {
-        p1Days.push(...eventDays);
+        p1Days.push(event.start);
       } else {
-        p2Days.push(...eventDays);
+        p2Days.push(event.start);
       }
     });
 
@@ -235,7 +252,7 @@ export function CustodyCalendarView() {
             {date ? format(date, 'd MMMM yyyy', { locale: fr }) : 'Aucune date sélectionnée'}
           </CardTitle>
           <CardDescription>
-            {eventsForSelectedDay.length} événement(s) prévu(s).
+            {eventsForSelectedDay.length} événement(s) de passation prévu(s).
           </CardDescription>
         </CardHeader>
         <Separator />
@@ -249,8 +266,8 @@ export function CustodyCalendarView() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-                <p>Aucun événement pour ce jour.</p>
-                <p className="text-xs">Sélectionnez un jour avec un point pour voir les événements.</p>
+                <p>Aucun événement de passation pour ce jour.</p>
+                <p className="text-xs">Les jours de garde sont indiqués par la couleur de fond.</p>
               </div>
             )}
           </CardContent>
