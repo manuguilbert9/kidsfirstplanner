@@ -58,8 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     const userDocRef = doc(db, 'users', user.uid);
     
-    const unsubscribeUser = onSnapshot(userDocRef, (doc) => {
-      const userData = doc.data();
+    const unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
+      const userData = docSnap.data();
       const currentGroupId = userData?.groupId || null;
       
       setUserProfile(prev => ({
@@ -86,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
              console.error("Erreur d'écoute du groupe:", error);
              setLoading(false);
          });
-         return unsubscribeGroup;
+         return () => unsubscribeGroup();
       } else {
         setUserProfile(prev => ({...prev, recurringSchedule: null}));
         setLoading(false);
