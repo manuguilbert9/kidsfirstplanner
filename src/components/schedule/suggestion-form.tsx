@@ -159,7 +159,7 @@ export function SuggestionForm({ onSuggestion }: SuggestionFormProps) {
         )}
 
         {result && (
-            <Alert variant="default" className="border-accent text-accent-foreground">
+            <Alert variant="default" className="border-primary text-primary-foreground">
                 <AlertTitle>Suggestion trouvée !</AlertTitle>
                 <AlertDescription>
                     <p className="font-bold">Heure suggérée : {format(new Date(result.suggestedTime), 'p', { locale: fr })}</p>

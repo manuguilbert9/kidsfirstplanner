@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Sheet,
   SheetContent,
@@ -34,6 +34,8 @@ import {
 import { SuggestionForm } from './suggestion-form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RecurringEventForm } from './recurring-event-form';
+import { useAuth } from '@/hooks/use-auth';
+import type { ParentRole } from '@/lib/types';
 
 interface EventSheetProps {
   open: boolean;
@@ -42,8 +44,18 @@ interface EventSheetProps {
 
 export function EventSheet({ open, onOpenChange }: EventSheetProps) {
   const { toast } = useToast();
+  const { parentRole } = useAuth();
   const [isSuggestionModalOpen, setSuggestionModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedParent, setSelectedParent] = useState<ParentRole | ''>('');
+
+  useEffect(() => {
+    if (open && parentRole) {
+      setSelectedParent(parentRole);
+    } else if (!open) {
+      setSelectedParent('');
+    }
+  }, [open, parentRole]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,13 +100,13 @@ export function EventSheet({ open, onOpenChange }: EventSheetProps) {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="parent">Parent</Label>
-                    <Select required>
+                    <Select required value={selectedParent} onValueChange={(value: ParentRole) => setSelectedParent(value)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Sélectionner le parent" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="parent-a">Parent 1</SelectItem>
-                        <SelectItem value="parent-b">Parent 2</SelectItem>
+                        <SelectItem value="Parent 1">Parent 1</SelectItem>
+                        <SelectItem value="Parent 2">Parent 2</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -127,7 +139,7 @@ export function EventSheet({ open, onOpenChange }: EventSheetProps) {
                   className="w-full"
                   onClick={() => setSuggestionModalOpen(true)}
                 >
-                  <Sparkles className="w-4 h-4 mr-2 text-accent" />
+                  <Sparkles className="w-4 h-4 mr-2 text-primary" />
                   Suggérer une heure de passation
                 </Button>
 
@@ -155,7 +167,7 @@ export function EventSheet({ open, onOpenChange }: EventSheetProps) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-accent" />
+              <Sparkles className="w-5 h-5 text-primary" />
               Suggérer une heure de passation optimale
             </DialogTitle>
             <DialogDescription>
