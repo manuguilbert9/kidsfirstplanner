@@ -26,11 +26,14 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { Switch } from '../ui/switch';
+import type { ParentRole } from '@/lib/types';
 
 const formSchema = z.object({
   alternatingWeekDay: z.coerce.number().min(1).max(7),
   handoverTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Format de l\'heure invalide.'),
   startDate: z.string().min(1, 'La date de début est requise.'),
+  invertParents: z.boolean(),
 });
 
 type RecurringFormValues = z.infer<typeof formSchema>;
@@ -53,6 +56,7 @@ export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { updateRecurringSchedule, recurringSchedule } = useAuth();
+  const [parentA, setParentA] = useState<ParentRole>('Parent 1');
 
   const form = useForm<RecurringFormValues>({
     resolver: zodResolver(formSchema),
@@ -60,15 +64,24 @@ export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
       alternatingWeekDay: 3, // Mercredi
       handoverTime: '18:00',
       startDate: format(new Date(), 'yyyy-MM-dd'),
+      invertParents: false,
     },
   });
+  
+  const invertParents = form.watch('invertParents');
+
+  useEffect(() => {
+    setParentA(invertParents ? 'Parent 2' : 'Parent 1');
+  }, [invertParents]);
 
   useEffect(() => {
     if (recurringSchedule) {
+      const inverted = recurringSchedule.parentA === 'Parent 2';
       form.reset({
         alternatingWeekDay: recurringSchedule.alternatingWeekDay,
         handoverTime: recurringSchedule.handoverTime,
         startDate: format(new Date(recurringSchedule.startDate), 'yyyy-MM-dd'),
+        invertParents: inverted,
       });
     }
   }, [recurringSchedule, form]);
@@ -80,6 +93,8 @@ export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
         alternatingWeekDay: values.alternatingWeekDay,
         handoverTime: values.handoverTime,
         startDate: new Date(values.startDate),
+        parentA: values.invertParents ? 'Parent 2' : 'Parent 1',
+        parentB: values.invertParents ? 'Parent 1' : 'Parent 2',
       });
       toast({
         title: 'Calendrier mis à jour',
@@ -154,9 +169,26 @@ export function RecurringEventForm({ onSave }: RecurringEventFormProps) {
           )}
         />
         
-        <p className="text-xs text-muted-foreground">
-            Le calendrier alternera chaque semaine entre le Parent 1 et le Parent 2, à partir de la date spécifiée.
-        </p>
+         <FormField
+          control={form.control}
+          name="invertParents"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+              <div className="space-y-0.5">
+                <FormLabel>Inverser les parents</FormLabel>
+                 <p className="text-xs text-muted-foreground">
+                    Le calendrier commencera avec le <strong>{parentA}</strong>.
+                </p>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
 
         <div className="flex justify-end pt-4 space-x-2">
           <Button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-[#FF8C00] via-[#E2583E] to-[#F472D0] text-white">

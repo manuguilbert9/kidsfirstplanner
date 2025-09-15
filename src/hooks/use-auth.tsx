@@ -27,7 +27,7 @@ interface AuthContextType {
   createGroup: (userId: string, groupName: string) => Promise<string>;
   joinGroup: (userId: string, groupId: string) => Promise<boolean>;
   updateParentRole: (userId: string, role: ParentRole) => Promise<void>;
-  updateRecurringSchedule: (schedule: Omit<RecurringSchedule, 'parentA' | 'parentB'>) => Promise<void>;
+  updateRecurringSchedule: (schedule: RecurringSchedule) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -127,16 +127,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await setDoc(doc(db, 'users', userId), { parentRole: role }, { merge: true });
   };
 
-  const updateRecurringSchedule = async (schedule: Omit<RecurringSchedule, 'parentA' | 'parentB'>) => {
+  const updateRecurringSchedule = async (schedule: RecurringSchedule) => {
     if (!userProfile.groupId) throw new Error("L'utilisateur n'est pas dans un groupe.");
     
     const groupDocRef = doc(db, 'groups', userProfile.groupId);
-    const scheduleToSave = {
-        ...schedule,
-        parentA: 'Parent 1',
-        parentB: 'Parent 2',
-    };
-    await setDoc(groupDocRef, { recurringSchedule: scheduleToSave }, { merge: true });
+    await setDoc(groupDocRef, { recurringSchedule: schedule }, { merge: true });
   }
   
   const value = { 
