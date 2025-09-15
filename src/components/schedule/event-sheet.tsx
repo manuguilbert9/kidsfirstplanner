@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/dialog';
 import { SuggestionForm } from './suggestion-form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { RecurringEventForm } from './recurring-event-form';
 
 interface EventSheetProps {
   open: boolean;
@@ -71,7 +72,7 @@ export function EventSheet({ open, onOpenChange }: EventSheetProps) {
           <Tabs defaultValue="one-time" className="mt-4">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="one-time">One-Time</TabsTrigger>
-              <TabsTrigger value="recurring" disabled>Recurring</TabsTrigger>
+              <TabsTrigger value="recurring">Recurring</TabsTrigger>
             </TabsList>
             <TabsContent value="one-time">
               <form onSubmit={handleSubmit} className="py-4 space-y-4">
@@ -145,9 +146,7 @@ export function EventSheet({ open, onOpenChange }: EventSheetProps) {
               </form>
             </TabsContent>
             <TabsContent value="recurring">
-              <div className="flex items-center justify-center h-48 text-center text-muted-foreground">
-                <p>Recurring schedule templates are coming soon!</p>
-              </div>
+                <RecurringEventForm onSave={() => onOpenChange(false)} />
             </TabsContent>
           </Tabs>
         </SheetContent>

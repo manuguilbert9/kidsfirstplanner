@@ -1,17 +1,19 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { mockEvents } from '@/lib/mock-data';
-import type { CustodyEvent } from '@/lib/types';
-import { format, isSameDay, isToday } from 'date-fns';
+import type { CustodyEvent, RecurringSchedule } from '@/lib/types';
+import { format, isSameDay, getDay, addDays, setHours, setMinutes, startOfWeek, endOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, areIntervalsOverlapping } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { MapPin, User, Clock, Edit } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 function EventCard({ event }: { event: CustodyEvent }) {
   return (
@@ -45,22 +47,117 @@ function EventCard({ event }: { event: CustodyEvent }) {
   );
 }
 
+const generateRecurringEvents = (schedule: RecurringSchedule | null, visibleRange: { start: Date, end: Date }): CustodyEvent[] => {
+    if (!schedule) return [];
+
+    const events: CustodyEvent[] = [];
+    const weeks = eachWeekOfInterval(visibleRange, { weekStartsOn: schedule.alternatingWeekDay as any });
+    const [handoverHour, handoverMinute] = schedule.handoverTime.split(':').map(Number);
+    
+    let isParentAWeek = true;
+    const scheduleStartWeek = startOfWeek(schedule.startDate, { weekStartsOn: schedule.alternatingWeekDay as any });
+
+    for (const weekStart of weeks) {
+        if (weekStart < scheduleStartWeek) continue;
+
+        const weekNumber = Math.floor((weekStart.getTime() - scheduleStartWeek.getTime()) / (1000 * 60 * 60 * 24 * 7));
+        isParentAWeek = weekNumber % 2 === 0;
+
+        const currentParent = isParentAWeek ? schedule.parentA : schedule.parentB;
+        const nextParent = isParentAWeek ? schedule.parentB : schedule.parentA;
+        
+        const handoverDateTime = setMinutes(setHours(weekStart, handoverHour), handoverMinute);
+        const endOfCustodyWeek = addDays(handoverDateTime, 7);
+
+        const event: CustodyEvent = {
+            id: `recurring-${weekStart.toISOString()}`,
+            title: `Custody Week`,
+            start: handoverDateTime,
+            end: endOfCustodyWeek,
+            parent: currentParent,
+            location: 'Alternating',
+            description: `Week with ${currentParent}. Handover to ${nextParent} at the end.`,
+            isHandover: true,
+        };
+        events.push(event);
+    }
+    return events;
+};
+
+const getEventsForDay = (day: Date, allEvents: CustodyEvent[]): CustodyEvent[] => {
+    return allEvents.filter(event => 
+        isSameDay(event.start, day) || 
+        (day > event.start && day < event.end)
+    ).sort((a,b) => a.start.getTime() - b.start.getTime());
+};
+
+
 export function CustodyCalendarView() {
   const [date, setDate] = useState<Date | undefined>(new Date());
   const isMobile = useIsMobile();
+  const [showRecurring, setShowRecurring] = useState(true);
+  const [recurringSchedule, setRecurringSchedule] = useState<RecurringSchedule | null>({
+      alternatingWeekDay: 5, // Friday
+      handoverTime: '18:00',
+      parentA: 'Parent A',
+      parentB: 'Parent B',
+      startDate: new Date(),
+  });
+
+  const visibleMonths = useMemo(() => {
+    const firstDay = startOfMonth(date || new Date());
+    return [firstDay];
+  },[date]);
+
+  const allEvents = useMemo(() => {
+    const oneTimeEvents = mockEvents;
+    if (!showRecurring || !recurringSchedule) return oneTimeEvents;
+    
+    const visibleRange = {
+      start: startOfMonth(visibleMonths[0]),
+      end: endOfMonth(visibleMonths[isMobile ? 0 : 1] ?? visibleMonths[0])
+    };
+
+    const recurringEvents = generateRecurringEvents(recurringSchedule, visibleRange)
+        .filter(re => {
+            // Filter out recurring events that overlap with one-time handovers
+            return !oneTimeEvents.some(ote => 
+                ote.isHandover && areIntervalsOverlapping(
+                    {start: ote.start, end: ote.end},
+                    {start: re.start, end: re.end}
+                )
+            );
+        });
+
+    return [...oneTimeEvents, ...recurringEvents];
+
+  }, [recurringSchedule, showRecurring, visibleMonths, isMobile]);
 
   const eventsForSelectedDay = useMemo(() => {
-    return date ? mockEvents.filter((event) => isSameDay(event.start, date)).sort((a,b) => a.start.getTime() - b.start.getTime()) : [];
-  }, [date]);
+    return date ? getEventsForDay(date, allEvents) : [];
+  }, [date, allEvents]);
 
-  const eventDays = useMemo(() => mockEvents.map(event => event.start), []);
+  const eventDays = useMemo(() => allEvents.map(event => event.start), [allEvents]);
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <Card className="flex flex-col lg:col-span-2">
         <CardHeader>
-          <CardTitle>Schedule</CardTitle>
-          <CardDescription>Select a day to see the detailed schedule.</CardDescription>
+          <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Schedule</CardTitle>
+                <CardDescription>Select a day to see the detailed schedule.</CardDescription>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch 
+                    id="recurring-toggle" 
+                    checked={showRecurring} 
+                    onCheckedChange={setShowRecurring}
+                    disabled={!recurringSchedule}
+                />
+                <Label htmlFor="recurring-toggle">Show Recurring</Label>
+              </div>
+          </div>
         </CardHeader>
         <CardContent className="flex justify-center">
           <Calendar
