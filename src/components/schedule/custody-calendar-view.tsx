@@ -5,7 +5,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { mockEvents } from '@/lib/mock-data';
 import type { CustodyEvent, RecurringSchedule, CustodyOverride, ParentRole } from '@/lib/types';
-import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, endOfMonth, isWithinInterval, eachDayOfInterval, differenceInWeeks, getDay, addWeeks, subWeeks, endOfWeek, addMonths, startOfMonth, isAfter, isBefore, isEqual } from 'date-fns';
+import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, endOfMonth, isWithinInterval, eachDayOfInterval, differenceInWeeks, getDay, addWeeks, subWeeks, endOfWeek, addMonths, startOfMonth, isAfter, isBefore, isEqual, differenceInCalendarWeeks } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -57,9 +57,11 @@ const generateRecurringEvents = (
 ): CustodyEvent[] => {
     
     const events: CustodyEvent[] = [];
-    const weekStartsOn = 1; // Lundi
+    if (!schedule) return events;
     
+    const weekStartsOn = 1; // Lundi
     const daysToCover = eachDayOfInterval(visibleRange);
+    const scheduleStartDate = new Date(schedule.startDate);
 
     daysToCover.forEach(day => {
         let currentParent: ParentRole | undefined;
@@ -72,14 +74,9 @@ const generateRecurringEvents = (
 
         if (activeOverride) {
             currentParent = activeOverride.parent;
-        } else if (schedule) {
+        } else {
             // 2. Fallback to recurring schedule
-            const scheduleStartDate = new Date(schedule.startDate);
-            
-            const startOfDisplayWeek = startOfWeek(day, { weekStartsOn, locale: fr });
-            const startOfScheduleWeek = startOfWeek(scheduleStartDate, { weekStartsOn, locale: fr });
-            
-            const weekDiff = differenceInWeeks(startOfDisplayWeek, startOfScheduleWeek, { locale: fr });
+            const weekDiff = differenceInCalendarWeeks(day, scheduleStartDate, { weekStartsOn, locale: fr });
             
             if (weekDiff % 2 === 0) {
                 currentParent = schedule.parentA;
@@ -102,58 +99,56 @@ const generateRecurringEvents = (
         }
     });
 
-    // 3. Generate handover events only if recurring schedule exists
-    if (schedule) {
-        const [handoverHour, handoverMinute] = schedule.handoverTime.split(':').map(Number);
-        const scheduleStartDate = new Date(schedule.startDate);
+    // 3. Generate handover events
+    const [handoverHour, handoverMinute] = schedule.handoverTime.split(':').map(Number);
+    
+    let firstHandoverInSchedule = addDays(startOfWeek(scheduleStartDate, { weekStartsOn }), schedule.alternatingWeekDay - 1);
+    if(isBefore(firstHandoverInSchedule, scheduleStartDate)) {
+        firstHandoverInSchedule = addWeeks(firstHandoverInSchedule, 1);
+    }
+
+    let currentHandover = firstHandoverInSchedule;
+    while(isBefore(currentHandover, visibleRange.start)) {
+        currentHandover = addWeeks(currentHandover, 2); // alternating weeks
+    }
+     while(isAfter(currentHandover, visibleRange.start)) {
+        currentHandover = subWeeks(currentHandover, 2); // alternating weeks
+    }
+
+
+    while (isBefore(currentHandover, visibleRange.end) || isEqual(currentHandover, visibleRange.end)) {
+        const handoverDateTime = setMinutes(setHours(currentHandover, handoverHour), handoverMinute);
         
-        let currentHandover = startOfWeek(scheduleStartDate, { weekStartsOn });
-        currentHandover = addDays(currentHandover, getDay(currentHandover) < schedule.alternatingWeekDay ? 
-          schedule.alternatingWeekDay - getDay(currentHandover) : 
-          (7 - getDay(currentHandover) + schedule.alternatingWeekDay) % 7
+        const isInOverride = overrides.some(o => 
+            (isAfter(handoverDateTime, o.startDate) || isEqual(handoverDateTime, o.startDate)) &&
+            (isBefore(handoverDateTime, o.endDate) || isEqual(handoverDateTime, o.endDate))
         );
-         if (isBefore(currentHandover, scheduleStartDate)) {
-            currentHandover = addWeeks(currentHandover, 1);
-        }
 
-        let firstHandoverInRange = currentHandover;
-        while (isBefore(firstHandoverInRange, visibleRange.start)) {
-            firstHandoverInRange = addWeeks(firstHandoverInRange, 1);
-        }
-        while (isAfter(firstHandoverInRange, visibleRange.start)) {
-             firstHandoverInRange = subWeeks(firstHandoverInRange, 1);
-        }
-        
-        currentHandover = firstHandoverInRange;
-        while (isBefore(currentHandover, visibleRange.end) || isEqual(currentHandover, visibleRange.end)) {
-            const handoverDateTime = setMinutes(setHours(currentHandover, handoverHour), handoverMinute);
-            
-            const isInOverride = overrides.some(o => 
-                (isAfter(handoverDateTime, o.startDate) || isEqual(handoverDateTime, o.startDate)) &&
-                (isBefore(handoverDateTime, o.endDate) || isEqual(handoverDateTime, o.endDate))
-            );
+        if (isWithinInterval(handoverDateTime, visibleRange) && !isInOverride) {
+            const weekDiff = differenceInCalendarWeeks(handoverDateTime, scheduleStartDate, { weekStartsOn, locale: fr });
 
-            if (isWithinInterval(handoverDateTime, visibleRange) && !isInOverride) {
-                 const startOfHandoverWeek = startOfWeek(handoverDateTime, { weekStartsOn, locale: fr });
-                 const startOfScheduleWeek = startOfWeek(scheduleStartDate, { weekStartsOn, locale: fr });
-                 const weekDiff = differenceInWeeks(startOfHandoverWeek, startOfScheduleWeek, { locale: fr });
-                
-                const fromParent = weekDiff % 2 === 0 ? schedule.parentA : schedule.parentB;
-                const toParent = weekDiff % 2 === 0 ? schedule.parentB : schedule.parentA;
+            const fromParent = weekDiff % 2 === 0 ? schedule.parentA : schedule.parentB;
+            const toParent = weekDiff % 2 === 0 ? schedule.parentB : schedule.parentA;
 
-                events.push({
-                    id: `handover-${format(handoverDateTime, 'yyyy-MM-dd')}`,
-                    title: 'Passation',
-                    start: handoverDateTime,
-                    end: setMinutes(setHours(handoverDateTime, handoverHour + 1), handoverMinute),
-                    parent: toParent,
-                    location: 'Lieu de passation',
-                    description: `Passation de ${fromParent} à ${toParent}`,
-                    isHandover: true,
-                });
-            }
-            currentHandover = addWeeks(currentHandover, 1);
+            events.push({
+                id: `handover-${format(handoverDateTime, 'yyyy-MM-dd')}`,
+                title: 'Passation',
+                start: handoverDateTime,
+                end: setMinutes(setHours(handoverDateTime, handoverHour + 1), handoverMinute),
+                parent: toParent,
+                location: 'Lieu de passation',
+                description: `Passation de ${getFirstName(fromParent)} à ${getFirstName(toParent)}`,
+                isHandover: true,
+            });
         }
+        currentHandover = addWeeks(currentHandover, 2);
+    }
+    
+    // Fallback for names in description
+    function getFirstName(role: ParentRole): string {
+        if(role === schedule?.parentA) return 'Parent 1';
+        if(role === schedule?.parentB) return 'Parent 2';
+        return role;
     }
 
 
@@ -364,3 +359,5 @@ export function CustodyCalendarView() {
     </>
   );
 }
+
+    
