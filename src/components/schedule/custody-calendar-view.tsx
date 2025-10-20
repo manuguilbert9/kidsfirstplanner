@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/use-auth';
 import { OverrideSheet } from './override-sheet';
 import { Button } from '../ui/button';
+import { EmptyCalendarState } from './empty-calendar-state';
 
 function EventCard({ event, getFirstName }: { event: CustodyEvent; getFirstName: (role: ParentRole) => string }) {
   return (
@@ -241,6 +242,11 @@ export function CustodyCalendarView() {
   const handleOverrideClick = () => {
     setOverrideSheetOpen(true);
   }
+  // Show empty state if no schedule configured
+  if (!recurringSchedule) {
+    return <EmptyCalendarState />;
+  }
+
 
   return (
     <>
