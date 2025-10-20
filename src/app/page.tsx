@@ -9,7 +9,7 @@ import { useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 
 export default function Home() {
-  const { user, loading, groupId } = useAuth();
+  const { user, loading, groupId, recurringSchedule } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -18,11 +18,13 @@ export default function Home() {
         router.replace('/login');
       } else if (!groupId) {
         router.replace('/groups/setup');
+      } else if (!recurringSchedule) {
+        router.replace('/schedule-setup');
       }
     }
-  }, [user, loading, groupId, router]);
+  }, [user, loading, groupId, recurringSchedule, router]);
 
-  if (loading || !user || !groupId) {
+  if (loading || !user || !groupId || !recurringSchedule) {
     return (
        <div className="flex flex-col min-h-screen bg-background items-center justify-center">
         <Loader2 className="w-12 h-12 animate-spin text-primary" />
