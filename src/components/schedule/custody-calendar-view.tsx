@@ -3,9 +3,8 @@
 import { useState, useMemo } from 'react';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { mockEvents } from '@/lib/mock-data';
-import type { CustodyEvent, RecurringSchedule, CustodyOverride, ParentRole } from '@/lib/types';
-import { format, isSameDay, addDays, setHours, setMinutes, startOfWeek, endOfMonth, isWithinInterval, eachDayOfInterval, getDay, addWeeks, subWeeks, endOfWeek, addMonths, startOfMonth, isAfter, isBefore, isEqual, differenceInDays } from 'date-fns';
+import type { CustodyEvent, ParentRole } from '@/lib/types';
+import { format, isSameDay, endOfMonth, endOfWeek, addMonths, startOfMonth, startOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -18,6 +17,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { OverrideSheet } from './override-sheet';
 import { Button } from '../ui/button';
 import { EmptyCalendarState } from './empty-calendar-state';
+import { useSchedule } from '@/hooks/use-schedule';
 
 function EventCard({ event, getFirstName }: { event: CustodyEvent; getFirstName: (role: ParentRole) => string }) {
   return (
@@ -51,120 +51,12 @@ function EventCard({ event, getFirstName }: { event: CustodyEvent; getFirstName:
   );
 }
 
-const generateRecurringEvents = (
-    schedule: RecurringSchedule | null,
-    overrides: CustodyOverride[],
-    visibleRange: { start: Date, end: Date },
-    getFirstName: (role: ParentRole) => string,
-): CustodyEvent[] => {
-    
-    const events: CustodyEvent[] = [];
-    if (!schedule) return events;
-    
-    const weekStartsOn = 1; // Lundi
-    const daysToCover = eachDayOfInterval(visibleRange);
-    const scheduleStartDate = startOfWeek(new Date(schedule.startDate), { weekStartsOn, locale: fr });
-
-
-    daysToCover.forEach(day => {
-        let currentParent: ParentRole | undefined;
-
-        // 1. Check for overrides
-        const activeOverride = overrides.find(o => 
-            (isAfter(day, o.startDate) || isEqual(day, o.startDate)) &&
-            (isBefore(day, o.endDate) || isEqual(day, o.endDate))
-        );
-
-        if (activeOverride) {
-            currentParent = activeOverride.parent;
-        } else {
-            // 2. Fallback to recurring schedule
-             const dayDiff = differenceInDays(day, scheduleStartDate);
-             const weekNumber = Math.floor(dayDiff / 7);
-
-            if (weekNumber % 2 === 0) {
-                currentParent = schedule.parentA;
-            } else {
-                currentParent = schedule.parentB;
-            }
-        }
-
-        if (currentParent) {
-            events.push({
-                id: `bg-${format(day, 'yyyy-MM-dd')}`,
-                title: `Garde ${getFirstName(currentParent)}`,
-                start: day,
-                end: addDays(day, 1),
-                parent: currentParent,
-                location: '',
-                description: '',
-                isHandover: false,
-            });
-        }
-    });
-
-    // 3. Generate handover events
-    const [handoverHour, handoverMinute] = schedule.handoverTime.split(':').map(Number);
-    
-    let firstHandoverInSchedule = addDays(startOfWeek(new Date(schedule.startDate), { weekStartsOn }), schedule.alternatingWeekDay - 1);
-    if(isBefore(firstHandoverInSchedule, new Date(schedule.startDate))) {
-        firstHandoverInSchedule = addWeeks(firstHandoverInSchedule, 1);
-    }
-    
-    // Find the first handover relevant to the visible range
-    let currentHandover = firstHandoverInSchedule;
-    while(isBefore(currentHandover, visibleRange.start)) {
-        currentHandover = addWeeks(currentHandover, 2); // alternating weeks
-    }
-     while(isAfter(currentHandover, visibleRange.start)) {
-        currentHandover = subWeeks(currentHandover, 2); // alternating weeks
-    }
-
-
-    while (isBefore(currentHandover, visibleRange.end) || isEqual(currentHandover, visibleRange.end)) {
-        const handoverDateTime = setMinutes(setHours(currentHandover, handoverHour), handoverMinute);
-        
-        const isInOverride = overrides.some(o => 
-            (isAfter(handoverDateTime, o.startDate) || isEqual(handoverDateTime, o.startDate)) &&
-            (isBefore(handoverDateTime, o.endDate) || isEqual(handoverDateTime, o.endDate))
-        );
-
-        if (isWithinInterval(handoverDateTime, visibleRange) && !isInOverride) {
-            const dayDiff = differenceInDays(handoverDateTime, scheduleStartDate);
-            const weekNumber = Math.floor(dayDiff / 7);
-
-            const fromParent = weekNumber % 2 === 0 ? schedule.parentA : schedule.parentB;
-            const toParent = weekNumber % 2 === 0 ? schedule.parentB : schedule.parentA;
-
-            events.push({
-                id: `handover-${format(handoverDateTime, 'yyyy-MM-dd')}`,
-                title: 'Passation',
-                start: handoverDateTime,
-                end: setMinutes(setHours(handoverDateTime, handoverHour + 1), handoverMinute),
-                parent: toParent,
-                location: 'Lieu de passation',
-                description: `Passation de ${getFirstName(fromParent)} à ${getFirstName(toParent)}`,
-                isHandover: true,
-            });
-        }
-        currentHandover = addWeeks(currentHandover, 2);
-    }
-    
-    return events;
-};
-
-const getEventsForDay = (day: Date, allEvents: CustodyEvent[]): CustodyEvent[] => {
-    return allEvents
-      .filter(event => (isSameDay(day, event.start) && event.isHandover))
-      .sort((a,b) => a.start.getTime() - b.start.getTime());
-};
-
 
 export function CustodyCalendarView() {
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [currentMonth, setCurrentMonth] = useState(startOfMonth(new Date()));
   const isMobile = useIsMobile();
-  const { parentRole, recurringSchedule, custodyOverrides, getFirstName } = useAuth();
+  const { parentRole, recurringSchedule, getFirstName } = useAuth();
   const [showRecurring, setShowRecurring] = useState(true);
   const [overrideSheetOpen, setOverrideSheetOpen] = useState(false);
 
@@ -183,41 +75,23 @@ export function CustodyCalendarView() {
      return { start, end };
   }, [visibleMonths]);
 
-  const { allEvents, parent1Days, parent2Days, overrideDays } = useMemo(() => {
-    const oneTimeEvents = mockEvents;
-    
-    const recurring = showRecurring ? generateRecurringEvents(recurringSchedule, custodyOverrides, visibleRange, getFirstName) : [];
-
-    const combinedEvents = [...oneTimeEvents, ...recurring];
-
-    const p1Days: Date[] = [];
-    const p2Days: Date[] = [];
-    
-    const overrides: Date[] = [];
-    custodyOverrides.forEach(o => {
-        const overrideInterval = eachDayOfInterval({start: o.startDate, end: o.endDate});
-        overrides.push(...overrideInterval);
-    })
-
-
-    combinedEvents.forEach(event => {
-      if (event.isHandover) return;
-      if (event.parent === 'Parent 1') {
-        p1Days.push(event.start);
-      } else if (event.parent === 'Parent 2') {
-        p2Days.push(event.start);
-      }
-    });
-
-    return { allEvents: combinedEvents, parent1Days: p1Days, parent2Days: p2Days, overrideDays: overrides };
-
-  }, [recurringSchedule, showRecurring, visibleRange, custodyOverrides, getFirstName]);
+    // Use the schedule hook for all schedule calculations
+  const {
+    parent1Days,
+    parent2Days,
+    overrideDays,
+    handoverDays,
+    getEventsFor,
+    hasSchedule
+  } = useSchedule({
+    visibleRange,
+    showRecurring,
+  });
 
   const eventsForSelectedDay = useMemo(() => {
-    return date ? getEventsForDay(date, allEvents) : [];
-  }, [date, allEvents]);
+    return date ? getEventsFor(date) : [];
+  }, [date, getEventsFor]);
   
-  const handoverDays = useMemo(() => allEvents.filter(e => e.isHandover).map(event => event.start), [allEvents]);
 
   const modifiers = {
     hasEvent: handoverDays,
@@ -243,7 +117,7 @@ export function CustodyCalendarView() {
     setOverrideSheetOpen(true);
   }
   // Show empty state if no schedule configured
-  if (!recurringSchedule) {
+  if (!hasSchedule) {
     return <EmptyCalendarState />;
   }
 

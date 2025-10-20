@@ -19,6 +19,7 @@ import { FirestorePermissionError, type SecurityRuleContext } from '@/lib/errors
 
 
 interface UserProfile {
+  parentNames: Record<ParentRole, string> | null;
   groupId: string | null;
   parentRole: ParentRole | null;
   parentColor: string | null;
