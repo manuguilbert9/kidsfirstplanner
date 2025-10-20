@@ -3,6 +3,7 @@ import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
 import { AuthProvider } from '@/hooks/use-auth';
 import { ColorProvider } from '@/hooks/use-colors';
+import { FirebaseErrorListener } from '@/components/layout/firebase-error-listener';
 
 export const metadata: Metadata = {
   title: 'KidsFirst Planner',
@@ -27,6 +28,7 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <ColorProvider>
           <AuthProvider>
+            <FirebaseErrorListener />
             {children}
           </AuthProvider>
         </ColorProvider>
